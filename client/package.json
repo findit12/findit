@@ -1,0 +1,9 @@
+{
+  "name": "findit-client",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": { "dev": "vite", "build": "tsc -b && vite build" },
+  "dependencies": { "@vitejs/plugin-react": "latest", "vite": "latest", "react": "latest", "react-dom": "latest" },
+  "devDependencies": { "typescript": "latest", "@types/node": "latest", "@types/react": "latest", "@types/react-dom": "latest" }
+}
