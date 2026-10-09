@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: [Main, feature/nestjs-typeorm-migration]
+  pull_request:
+    branches: [Main, feature/nestjs-typeorm-migration]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix client
+      - run: npm ci --prefix server
+      - run: npm run build
+      - run: npm test --prefix server
+      - name: Verify no .js files exist in TypeScript source directories
+        run: test -z "$(find client/src server/src -name '*.js' -print -quit)"

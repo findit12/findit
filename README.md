@@ -1,46 +1,74 @@
 # FindIt
 
-## Run the project on a new computer
+Lost and found web application for campus communities. Built with **React** (frontend), **NestJS**, **TypeORM**, and **PostgreSQL** (backend).
 
-1. Install Node.js (version 20 or newer) and PostgreSQL.
+## Prerequisites
 
-2. Create a PostgreSQL database named `findit`.
+- **Node.js**: version 20 or newer
+- **PostgreSQL**: version 14 or newer
 
-3. Clone this repository and open its folder in a terminal.
+## Setup & Running the Project
 
-4. Install the project packages:
+1. **Recreate the database** (for fresh migration):
+   ```sql
+   DROP DATABASE IF EXISTS findit;
+   CREATE DATABASE findit;
+   ```
 
-   ```powershell
+2. **Install dependencies**:
+   ```bash
    npm install
    npm install --prefix client
    npm install --prefix server
    ```
 
-5. Copy `server/.env.example` to a new file named `server/.env`.
+3. **Configure environment variables**:
+   - Copy `server/.env.example` to `server/.env`:
+     ```env
+     DATABASE_URL=postgresql://postgres:postgres@localhost:5432/findit
+     JWT_SECRET=your-secure-jwt-secret-key
+     CLIENT_URL=http://localhost:5173
+     SCHOOL_EMAIL_DOMAIN=your-school.edu
+     PORT=3000
+     ```
+   - (Optional) Copy `client/.env.example` to `client/.env` if configuring a custom server host:
+     ```env
+     VITE_API_URL=http://localhost:3000/api
+     ```
 
-6. Edit `server/.env` and set these values:
-
-   ```env
-   DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD@localhost:5432/findit
-   JWT_SECRET=choose-a-long-random-secret
-   CLIENT_URL=http://localhost:5173
-   SCHOOL_EMAIL_DOMAIN=your-school.edu
-   PORT=3000
+4. **Run database migrations**:
+   ```bash
+   npm run migration:run --prefix server
    ```
 
-7. Start the app:
-
-   ```powershell
+5. **Start development servers**:
+   ```bash
    npm run dev
    ```
+   This concurrently runs the NestJS watch server (`nest start --watch`) on port 3000 and the Vite client on port 5173.
 
-8. Open `http://localhost:5173` in a browser.
+6. **Access the application**:
+   - Web application: [http://localhost:5173](http://localhost:5173)
+   - Interactive Swagger API Documentation: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
+   - Local mock emails are saved in `server/dev-emails/`.
 
-9. For verification and password-reset emails, open `http://localhost:3000/dev-emails/`. This is a local inbox built into the project and does not require an email account or SMTP service.
+## Testing
 
-## If the app does not start
+Run unit tests and end-to-end integration tests:
+```bash
+# Run test suite
+npm run test --prefix server
 
-1. Check that PostgreSQL is running.
-2. Check the password in `DATABASE_URL`.
-3. Check that the `findit` database exists.
-4. Stop the app with `Ctrl+C` and run `npm run dev` again.
+# Run test coverage suite (>90% coverage on critical services)
+npm run test:cov --prefix server
+```
+
+For continuous integration with a separate database, set `DATABASE_URL` in your test environment to point to a dedicated `findit_test` database.
+
+## Architecture & Migration Details
+
+- **Backend**: NestJS with strict TypeScript (`no .js` in source).
+- **ORM**: TypeORM with migration files (`synchronize: false`).
+- **Auth**: Single-use hashed `AuthToken` entity for verification and password reset.
+- **Security**: Passwords hashed with bcrypt; unverified accounts blocked from signing in with resend option.
+- **Reliability**: Asynchronous background email delivery preventing HTTP 500 regressions during SMTP outages.

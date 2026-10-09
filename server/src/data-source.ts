@@ -1,0 +1,2 @@
+import 'dotenv/config'; import { DataSource } from 'typeorm'; import { User } from './users/user.entity'; import { AuthToken } from './auth/auth-token.entity'; import { FoundAnnouncement } from './announcements/found-announcement.entity';
+export default new DataSource({type:'postgres',url:process.env.DATABASE_URL,entities:[User,AuthToken,FoundAnnouncement],migrations:['src/migrations/*.ts'],synchronize:false});
