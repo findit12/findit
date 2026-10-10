@@ -15,17 +15,20 @@ interface RequestOptions {
 }
 
 // Sends a request to the API and returns the JSON answer.
+// The body is sent as JSON, or as multipart/form-data when it is a FormData (form with files).
 // If the server answers with an error, it throws an ApiError with the server message.
 export async function apiRequest<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token } = options;
+  const isFormData = body instanceof FormData;
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      // For a FormData, the browser writes the Content-Type itself (with the file separator).
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
   });
 
   const data = response.status === 204 ? {} : await response.json();
@@ -39,4 +42,10 @@ export async function apiRequest<T = any>(path: string, options: RequestOptions 
   }
 
   return data as T;
+}
+
+// The API sends photo paths like "/uploads/abc.jpg". The photos are served by the API server,
+// so the full address is the server address (without "/api") followed by the path.
+export function photoUrl(path: string): string {
+  return `${new URL(API_URL).origin}${path}`;
 }

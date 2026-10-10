@@ -2,60 +2,53 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   Param,
+  ParseIntPipe,
   Post,
-  UnauthorizedException,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtService } from '@nestjs/jwt';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CurrentUserId } from '../auth/current-user-id.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CreateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
-import { CreateFoundAnnouncementDto } from './announcements.dto';
 
 @ApiTags('announcements')
 @Controller('announcements')
 export class AnnouncementsController {
-  constructor(
-    private readonly service: AnnouncementsService,
-    private readonly jwt: JwtService,
-  ) {}
+  constructor(private readonly service: AnnouncementsService) {}
 
-  private extractUserId(authHeader?: string): number {
-    if (!authHeader) {
-      throw new UnauthorizedException('Authentication required.');
-    }
-    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (!token) {
-      throw new UnauthorizedException('Authentication required.');
-    }
-    try {
-      const payload = this.jwt.verify(token);
-      const sub = Number(payload.sub);
-      if (!sub) throw new Error();
-      return sub;
-    } catch {
-      throw new UnauthorizedException('Authentication required.');
-    }
-  }
-
-  @Post('found')
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FilesInterceptor('photos', 4))
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Submit a found item announcement' })
-  @ApiResponse({ status: 201, description: 'Announcement created successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Declare a found object, with 1 to 4 photos' })
+  @ApiResponse({ status: 201, description: 'Announcement created (status Available)' })
+  @ApiResponse({ status: 400, description: 'Missing or invalid field, or invalid photos' })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
   create(
-    @Headers('authorization') auth: string,
-    @Body() dto: CreateFoundAnnouncementDto,
+    @CurrentUserId() userId: number,
+    @Body() dto: CreateAnnouncementDto,
+    @UploadedFiles() files: Express.Multer.File[] = [],
   ) {
-    const userId = this.extractUserId(auth);
-    return this.service.create(userId, dto.title, dto.description);
+    return this.service.create(userId, dto, files);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get a found item announcement by ID' })
+  @ApiOperation({ summary: 'Read an announcement (the hidden detail is never included)' })
   @ApiResponse({ status: 200, description: 'Announcement details' })
   @ApiResponse({ status: 404, description: 'Announcement not found' })
-  find(@Param('id') id: string) {
-    return this.service.find(Number(id));
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findPublic(id);
   }
 }

@@ -270,3 +270,154 @@ small {
     font-size: 1.75rem;
   }
 }
+
+/* ---------- Announcements (SCRUM-16 and following) ---------- */
+
+/* Wider page for the declaration form and the detail page. */
+main:has(.wide-card) {
+  width: min(100% - 32px, 640px);
+}
+
+select {
+  width: 100%;
+  border: 1px solid #d7dfd6;
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: #19362e;
+  background: #fcfdfb;
+  font-family: inherit;
+  font-size: 16px;
+}
+
+select:disabled {
+  opacity: 0.6;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.optional {
+  font-weight: 500;
+  color: #84918b;
+}
+
+.choice {
+  border: 1px solid #e0e6dd;
+  border-radius: 8px;
+  padding: 10px 14px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.choice legend,
+.field-title {
+  font-size: 0.77rem;
+  font-weight: 700;
+  color: #496157;
+}
+
+.choice label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.choice input {
+  width: auto;
+}
+
+.photos-field {
+  display: grid;
+  gap: 8px;
+}
+
+.photo-previews,
+.detail-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.photo-previews li {
+  display: grid;
+  gap: 4px;
+}
+
+.photo-previews img,
+.detail-photos img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e0e6dd;
+}
+
+.home-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.button-link {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.badge.found {
+  background: #e8f5ec;
+  color: #296348;
+}
+
+.badge.lost {
+  background: #fff1e8;
+  color: #ad563d;
+}
+
+.detail .description {
+  white-space: pre-line;
+  line-height: 1.55;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  font-size: 0.9rem;
+}
+
+.facts dt {
+  font-weight: 700;
+  color: #496157;
+}
+
+.facts dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+}

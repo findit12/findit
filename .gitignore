@@ -2,6 +2,7 @@
 node_modules/
 .npm-cache/
 dev-emails/
+uploads/
 
 # Build output
 dist/
