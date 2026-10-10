@@ -242,7 +242,7 @@ small {
   z-index: 0;
 }
 
-.found-card > * {
+.found-card>* {
   position: relative;
   z-index: 1;
 }
@@ -256,13 +256,16 @@ small {
     padding: 0 20px;
     height: 64px;
   }
+
   main {
     width: calc(100% - 32px);
     margin: 38px auto;
   }
-  card {
+
+  .card {
     padding: 25px;
   }
+
   h1 {
     font-size: 1.75rem;
   }
