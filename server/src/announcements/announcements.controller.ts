@@ -32,8 +32,8 @@ export class AnnouncementsController {
   @UseInterceptors(FilesInterceptor('photos', 4))
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Declare a found object, with 1 to 4 photos' })
-  @ApiResponse({ status: 201, description: 'Announcement created (status Available)' })
+  @ApiOperation({ summary: 'Declare a found object (1 to 4 photos) or a lost object (0 to 4 photos)' })
+  @ApiResponse({ status: 201, description: 'Announcement created (Available if found, Open if lost)' })
   @ApiResponse({ status: 400, description: 'Missing or invalid field, or invalid photos' })
   @ApiResponse({ status: 401, description: 'Not signed in' })
   create(

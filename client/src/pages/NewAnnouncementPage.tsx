@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import AnnouncementForm from '../components/AnnouncementForm';
-import { Announcement, AnnouncementFormValues, ReferenceData } from '../types/announcement';
+import { Announcement, AnnouncementFormValues, AnnouncementType, ReferenceData } from '../types/announcement';
 
-// Page "I found an object": loads the lists, shows the form, sends it with the photos.
+// Pages "I found an object" (/announcements/new) and "I lost an object" (/announcements/new?type=lost):
+// loads the lists, shows the form, sends it with the photos.
 export default function NewAnnouncementPage() {
   const { token, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const type: AnnouncementType = searchParams.get('type') === 'lost' ? 'lost' : 'found';
   const [reference, setReference] = useState<ReferenceData | null>(null);
   const [loadError, setLoadError] = useState('');
 
@@ -45,11 +48,16 @@ export default function NewAnnouncementPage() {
 
   return (
     <section className="card wide-card">
-      <h1>I found an object</h1>
-      <p className="intro">Describe the object so its owner can recognise it.</p>
+      <h1>{type === 'found' ? 'I found an object' : 'I lost an object'}</h1>
+      <p className="intro">
+        {type === 'found'
+          ? 'Describe the object so its owner can recognise it.'
+          : 'Describe your object so a finder can recognise it.'}
+      </p>
       {loadError && <p className="notice error">{loadError}</p>}
       {reference && (
-        <AnnouncementForm type="found" reference={reference} withPhotos submitLabel="Publish" onSubmit={send} />
+        // key={type}: switching between "found" and "lost" starts a new, empty form.
+        <AnnouncementForm key={type} type={type} reference={reference} withPhotos submitLabel="Publish" onSubmit={send} />
       )}
     </section>
   );

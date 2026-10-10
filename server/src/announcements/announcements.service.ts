@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
-import { Announcement, AnnouncementStatus } from './announcement.entity';
+import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
 import { CreateAnnouncementDto } from './announcements.dto';
 import { PhotoStorageService } from './photo-storage.service';
@@ -36,15 +36,18 @@ export class AnnouncementsService {
     private readonly mail: MailService,
   ) {}
 
-  // SCRUM-16: saves a found-object declaration with its photos.
+  // SCRUM-16 and SCRUM-20: saves a found or lost declaration with its photos.
   async create(authorId: number, dto: CreateAnnouncementDto, files: Express.Multer.File[]) {
     const author = await this.users.findOneBy({ id: authorId });
     if (!author) {
       throw new NotFoundException('User not found.');
     }
 
+    const isFound = dto.type === AnnouncementType.Found;
+
     // Every check runs before anything is saved, so an error never leaves half an announcement.
-    if (files.length < 1) {
+    // Photos: 1 to 4 for a found object (FR-05), optional for a lost one (FR-15).
+    if (isFound && files.length < 1) {
       throw new BadRequestException('Add at least one photo.');
     }
     if (dto.eventDate > today()) {
@@ -71,9 +74,11 @@ export class AnnouncementsService {
         eventDate: dto.eventDate,
         placeId: dto.placeId,
         placeDetails: emptyToNull(dto.placeDetails),
-        currentLocation: dto.currentLocation,
+        // Only a found object has a current location (SDD integrity rules).
+        currentLocation: isFound ? dto.currentLocation : null,
         hiddenDetail: emptyToNull(dto.hiddenDetail),
-        status: AnnouncementStatus.Available,
+        // Initial status: Available for a found object, Open for a lost one.
+        status: isFound ? AnnouncementStatus.Available : AnnouncementStatus.Open,
         expiresAt,
       }),
     );
