@@ -172,6 +172,22 @@ describe('AnnouncementsService', () => {
       expect(photoStorage.save).toHaveBeenCalledWith([expect.anything()]);
     });
 
+    it('sends the confirmation email with the id, title and type (SCRUM-17)', async () => {
+      await service.create(1, foundForm(), [photo()]);
+      expect(mail.confirmation).toHaveBeenCalledWith('elea@school.test', {
+        id: 7,
+        title: 'Black phone',
+        type: AnnouncementType.Found,
+      });
+
+      await service.create(1, lostForm(), []);
+      expect(mail.confirmation).toHaveBeenLastCalledWith('elea@school.test', {
+        id: 7,
+        title: 'Blue scarf',
+        type: AnnouncementType.Lost,
+      });
+    });
+
     it('still succeeds when the confirmation email fails', async () => {
       mail.confirmation.mockRejectedValue(new Error('SMTP down'));
       await expect(service.create(1, foundForm(), [photo()])).resolves.toBeDefined();
