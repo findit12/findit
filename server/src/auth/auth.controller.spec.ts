@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { AuthController } from './auth/auth.controller';
-import { AuthService } from './auth/auth.service';
-import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { AllExceptionsFilter } from '../common/filters/http-exception.filter';
 
-describe('AuthController (e2e HTTP test)', () => {
+describe('AuthController (HTTP)', () => {
   let app: INestApplication;
   const mockAuthService = {
     register: jest.fn().mockResolvedValue({

@@ -55,11 +55,14 @@ export class TokenQueryDto {
 }
 
 export class LoginDto {
+  @ApiProperty({ example: 'student@your-school.edu', description: 'School email address' })
   @IsString()
   @IsNotEmpty()
   email!: string;
 
+  @ApiProperty({ example: 'Password123', description: 'Account password' })
   @IsString()
   @IsNotEmpty()
   password!: string;
 }
+
