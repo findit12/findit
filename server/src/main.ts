@@ -1,13 +1,18 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { UPLOADS_DIR } from './announcements/photo-storage.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.setGlobalPrefix('api');
+
+  // Photos of the announcements, readable at http://localhost:3000/uploads/<file name>
+  app.useStaticAssets(UPLOADS_DIR, { prefix: '/uploads/' });
 
   // Configurable allowed origins (Point A8)
   const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')

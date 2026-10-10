@@ -1,60 +1,112 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { FoundAnnouncement } from './found-announcement.entity';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
+import { ReferenceService } from '../reference/reference.service';
+import { Announcement, AnnouncementStatus } from './announcement.entity';
+import { toOwnerView, toPublicView } from './announcement.views';
+import { CreateAnnouncementDto } from './announcements.dto';
+import { PhotoStorageService } from './photo-storage.service';
+
+const DAYS_BEFORE_ARCHIVE = 90;
+
+// Turns an empty optional field ("") into null, so the database stores "no value".
+function emptyToNull(value?: string): string | null {
+  return value ? value : null;
+}
+
+// Today's date as "YYYY-MM-DD", in the time zone of the server.
+function today(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
 
 @Injectable()
 export class AnnouncementsService {
   private readonly logger = new Logger(AnnouncementsService.name);
 
   constructor(
-    @InjectRepository(FoundAnnouncement)
-    private readonly items: Repository<FoundAnnouncement>,
-    @InjectRepository(User)
-    private readonly users: Repository<User>,
+    @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
+    @InjectRepository(User) private readonly users: Repository<User>,
+    private readonly reference: ReferenceService,
+    private readonly photoStorage: PhotoStorageService,
     private readonly mail: MailService,
   ) {}
 
-  async create(userId: number, title: string, description: string) {
-    const user = await this.users.findOneBy({ id: userId });
-    if (!user) {
+  // SCRUM-16: saves a found-object declaration with its photos.
+  async create(authorId: number, dto: CreateAnnouncementDto, files: Express.Multer.File[]) {
+    const author = await this.users.findOneBy({ id: authorId });
+    if (!author) {
       throw new NotFoundException('User not found.');
     }
 
-    const announcement = await this.items.save(
-      this.items.create({ user, title, description }),
+    // Every check runs before anything is saved, so an error never leaves half an announcement.
+    if (files.length < 1) {
+      throw new BadRequestException('Add at least one photo.');
+    }
+    if (dto.eventDate > today()) {
+      throw new BadRequestException('The date cannot be in the future.');
+    }
+    await this.reference.checkSelection(dto.categoryId, dto.objectTypeId, dto.placeId);
+
+    const photos = await this.photoStorage.save(files);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + DAYS_BEFORE_ARCHIVE);
+
+    const saved = await this.announcements.save(
+      this.announcements.create({
+        type: dto.type,
+        authorId,
+        title: dto.title,
+        categoryId: dto.categoryId,
+        objectTypeId: dto.objectTypeId,
+        description: dto.description,
+        brand: emptyToNull(dto.brand),
+        color: emptyToNull(dto.color),
+        photos,
+        eventDate: dto.eventDate,
+        placeId: dto.placeId,
+        placeDetails: emptyToNull(dto.placeDetails),
+        currentLocation: dto.currentLocation,
+        hiddenDetail: emptyToNull(dto.hiddenDetail),
+        status: AnnouncementStatus.Available,
+        expiresAt,
+      }),
     );
 
-    // Send confirmation in background without breaking or blocking the request (Point B2)
-    void this.mail.confirmation(user.email, announcement.id).catch((err) => {
-      this.logger.error(`Failed to send confirmation email for announcement ${announcement.id}`, err);
+    // The email is sent in the background: a mail problem never breaks the declaration (Point B2).
+    void this.mail.confirmation(author.email, saved.id).catch((err) => {
+      this.logger.error(`Failed to send confirmation email for announcement ${saved.id}`, err);
     });
 
-    return {
-      announcement: {
-        id: announcement.id,
-        title: announcement.title,
-        description: announcement.description,
-        created_at: announcement.createdAt,
-      },
-    };
+    return { announcement: toOwnerView(await this.findWithDetails(saved.id)) };
   }
 
-  async find(id: number) {
-    const item = await this.items.findOneBy({ id });
-    if (!item) {
+  // Detail page: anyone can read an announcement, except a deleted or hidden one.
+  async findPublic(id: number) {
+    const announcement = await this.announcements.findOne({
+      where: { id },
+      relations: { category: true, objectType: true, place: true },
+    });
+    if (
+      !announcement ||
+      announcement.status === AnnouncementStatus.Deleted ||
+      announcement.status === AnnouncementStatus.Hidden
+    ) {
       throw new NotFoundException('Announcement not found.');
     }
+    return { announcement: toPublicView(announcement) };
+  }
 
-    return {
-      announcement: {
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        created_at: item.createdAt,
-      },
-    };
+  // Loads an announcement with the names of its category, precise object and place.
+  private async findWithDetails(id: number): Promise<Announcement> {
+    return this.announcements.findOneOrFail({
+      where: { id },
+      relations: { category: true, objectType: true, place: true },
+    });
   }
 }

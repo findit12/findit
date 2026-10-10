@@ -1,2 +1,0 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm'; import { User } from '../users/user.entity';
-@Entity('found_announcements') export class FoundAnnouncement { @PrimaryGeneratedColumn() id!: number; @ManyToOne(() => User, { nullable: false }) user!: User; @Column() title!: string; @Column() description!: string; @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date; }

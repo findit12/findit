@@ -1,17 +1,105 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
+import { AnnouncementType, CurrentLocation } from './announcement.entity';
 
-export class CreateFoundAnnouncementDto {
-  @ApiProperty({ example: 'Blue Backpack', description: 'Item name or short title' })
+// Removes the spaces at the start and at the end of a text field.
+const Trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
+
+// Fields of the "declare an object" form. They arrive as multipart/form-data, so every value
+// arrives as text: @Type(() => Number) turns the ids back into numbers.
+// When several rules fail, the error filter shows the first message, which is the one of the
+// LAST decorator written. That is why @IsNotEmpty({ message }) is always written last.
+export class CreateAnnouncementDto {
+  @ApiProperty({ enum: ['found'], example: 'found' })
+  @IsIn([AnnouncementType.Found], { message: 'The type must be "found".' })
+  type!: AnnouncementType;
+
+  @ApiProperty({ example: 'Black iPhone 13', maxLength: 100 })
+  @Trim()
+  @MaxLength(100)
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Enter a title.' })
   title!: string;
 
-  @ApiProperty({
-    example: 'Found in the library on floor 2 near the computers.',
-    description: 'Detailed description of where and what was found',
-  })
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a category.' })
+  categoryId!: number;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a precise object.' })
+  objectTypeId!: number;
+
+  @ApiProperty({ example: 'Black phone with a cracked screen protector.', maxLength: 1000 })
+  @Trim()
+  @MaxLength(1000)
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Enter a description.' })
   description!: string;
+
+  @ApiPropertyOptional({ example: 'Apple', maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  brand?: string;
+
+  @ApiPropertyOptional({ example: 'Black', maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  color?: string;
+
+  @ApiProperty({ example: '2026-10-10', description: 'Day when the object was found, YYYY-MM-DD' })
+  @IsDateString({ strict: true }, { message: 'Enter a valid date.' })
+  eventDate!: string;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a place.' })
+  placeId!: number;
+
+  @ApiPropertyOptional({ example: 'Second floor, near the printers', maxLength: 200 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  placeDetails?: string;
+
+  // Required when the object was found: "I keep it" (finder) or "Reception".
+  @ApiPropertyOptional({ enum: CurrentLocation, description: 'Required for a found object' })
+  @ValidateIf((dto: CreateAnnouncementDto) => dto.type === AnnouncementType.Found)
+  @IsEnum(CurrentLocation, { message: 'Say where the object is now.' })
+  currentLocation?: CurrentLocation;
+
+  // Required when the object was found: a private detail to check the owner's claim.
+  @ApiPropertyOptional({ example: 'Sticker of a cat on the back', maxLength: 200 })
+  @Trim()
+  @ValidateIf((dto: CreateAnnouncementDto) => dto.type === AnnouncementType.Found)
+  @MaxLength(200)
+  @IsString()
+  @IsNotEmpty({ message: 'Enter a hidden detail that only the owner knows.' })
+  hiddenDetail?: string;
+
+  // Only for the Swagger page: the photos are read by the controller, not from this object.
+  @ApiPropertyOptional({
+    type: 'array',
+    items: { type: 'string', format: 'binary' },
+    description: '1 to 4 photos',
+  })
+  @IsOptional()
+  photos?: unknown;
 }
