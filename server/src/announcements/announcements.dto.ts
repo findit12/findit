@@ -3,7 +3,6 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
-  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -21,8 +20,8 @@ const Trim = () => Transform(({ value }) => (typeof value === 'string' ? value.t
 // When several rules fail, the error filter shows the first message, which is the one of the
 // LAST decorator written. That is why @IsNotEmpty({ message }) is always written last.
 export class CreateAnnouncementDto {
-  @ApiProperty({ enum: ['found'], example: 'found' })
-  @IsIn([AnnouncementType.Found], { message: 'The type must be "found".' })
+  @ApiProperty({ enum: AnnouncementType, example: 'found' })
+  @IsEnum(AnnouncementType, { message: 'The type must be "found" or "lost".' })
   type!: AnnouncementType;
 
   @ApiProperty({ example: 'Black iPhone 13', maxLength: 100 })
@@ -63,7 +62,7 @@ export class CreateAnnouncementDto {
   @MaxLength(50)
   color?: string;
 
-  @ApiProperty({ example: '2026-10-10', description: 'Day when the object was found, YYYY-MM-DD' })
+  @ApiProperty({ example: '2026-10-10', description: 'Day when the object was found or lost, YYYY-MM-DD' })
   @IsDateString({ strict: true }, { message: 'Enter a valid date.' })
   eventDate!: string;
 
@@ -98,7 +97,7 @@ export class CreateAnnouncementDto {
   @ApiPropertyOptional({
     type: 'array',
     items: { type: 'string', format: 'binary' },
-    description: '1 to 4 photos',
+    description: '1 to 4 photos for a found object, 0 to 4 for a lost one',
   })
   @IsOptional()
   photos?: unknown;

@@ -35,6 +35,20 @@ function foundForm(): CreateAnnouncementDto {
   };
 }
 
+// A valid form for a lost object: no current location, no hidden detail, no photo.
+function lostForm(): CreateAnnouncementDto {
+  return {
+    type: AnnouncementType.Lost,
+    title: 'Blue scarf',
+    categoryId: 3,
+    objectTypeId: 13,
+    description: 'Lost in the amphitheatre',
+    eventDate: '2026-10-02',
+    placeId: 4,
+    currentLocation: CurrentLocation.Finder, // sent by mistake: must be ignored
+  };
+}
+
 // What the repository returns once the announcement is saved and reloaded with its relations.
 function storedAnnouncement(overrides: Partial<Announcement> = {}): Announcement {
   return {
@@ -139,6 +153,23 @@ describe('AnnouncementsService', () => {
     it('refuses an unknown user', async () => {
       users.findOneBy.mockResolvedValue(null);
       await expect(service.create(99, foundForm(), [photo()])).rejects.toThrow(NotFoundException);
+    });
+
+    it('saves a lost announcement as Open, without current location (SCRUM-20)', async () => {
+      photoStorage.save.mockResolvedValue([]);
+      await service.create(1, lostForm(), []);
+
+      const saved = announcements.save.mock.calls[0][0];
+      expect(saved.type).toBe(AnnouncementType.Lost);
+      expect(saved.status).toBe(AnnouncementStatus.Open);
+      expect(saved.currentLocation).toBeNull();
+      expect(saved.hiddenDetail).toBeNull();
+      expect(saved.photos).toEqual([]);
+    });
+
+    it('accepts photos for a lost announcement too', async () => {
+      await service.create(1, lostForm(), [photo()]);
+      expect(photoStorage.save).toHaveBeenCalledWith([expect.anything()]);
     });
 
     it('still succeeds when the confirmation email fails', async () => {

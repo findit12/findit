@@ -421,3 +421,8 @@ select:disabled {
     grid-template-columns: 1fr;
   }
 }
+.home-actions .secondary {
+  margin-top: 0;
+  padding: 12px 14px;
+  font-size: 0.84rem;
+}

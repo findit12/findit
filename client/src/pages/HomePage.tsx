@@ -10,6 +10,9 @@ export default function HomePage() {
         <Link className="primary button-link" to="/announcements/new">
           I found an object
         </Link>
+        <Link className="secondary button-link" to="/announcements/new?type=lost">
+          I lost an object
+        </Link>
       </div>
     </section>
   );
