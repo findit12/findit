@@ -83,10 +83,13 @@ export class AnnouncementsService {
       }),
     );
 
-    // The email is sent in the background: a mail problem never breaks the declaration (Point B2).
-    void this.mail.confirmation(author.email, saved.id).catch((err) => {
-      this.logger.error(`Failed to send confirmation email for announcement ${saved.id}`, err);
-    });
+    // SCRUM-17: confirmation email, for found and lost declarations (FR-07).
+    // It is sent in the background: a mail problem never breaks the declaration (Point B2).
+    void this.mail
+      .confirmation(author.email, { id: saved.id, title: saved.title, type: saved.type })
+      .catch((err) => {
+        this.logger.error(`Failed to send confirmation email for announcement ${saved.id}`, err);
+      });
 
     return { announcement: toOwnerView(await this.findWithDetails(saved.id)) };
   }
