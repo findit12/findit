@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 const api = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 type Mode = 'register' | 'login' | 'forgot' | 'reset';
@@ -17,27 +18,39 @@ async function request(path: string, method = 'GET', body?: unknown, token?: str
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+
   const data = response.status === 204 ? {} : await response.json();
+
   if (!response.ok) {
     const error: ApiError = new Error(data.error ?? data.message ?? 'Request failed.');
     if (data.unverified) error.unverified = true;
     if (data.expired) error.expired = true;
     throw error;
   }
+
   return data;
 }
 
 export default function App() {
   const query = useMemo(() => new URLSearchParams(location.search), []);
-  const [mode, setMode] = useState<Mode>(location.pathname === '/reset-password' ? 'reset' : 'login');
+
+  // Prevent the same verification link from being submitted twice.
+  const verificationStarted = useRef(false);
+
+  const [mode, setMode] = useState<Mode>(
+    location.pathname === '/reset-password' ? 'reset' : 'login',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState(localStorage.getItem('findit-token') ?? '');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
-  const [verificationState, setVerificationState] = useState<'none' | 'expired' | 'unverified'>('none');
+  const [verificationState, setVerificationState] = useState<
+    'none' | 'expired' | 'unverified'
+  >('none');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+
   const resetToken = query.get('token') ?? '';
 
   const notify = (text: string, type: 'success' | 'error' = 'success') => {
@@ -53,12 +66,31 @@ export default function App() {
 
   useEffect(() => {
     const verificationToken = query.get('token');
-    if (!verificationToken || location.pathname === '/reset-password') return;
+
+    if (
+      !verificationToken ||
+      location.pathname === '/reset-password' ||
+      verificationStarted.current
+    ) {
+      return;
+    }
+
+    // Set this before sending the request so a repeated effect
+    // cannot submit the same one-time token again.
+    verificationStarted.current = true;
+
     request(`/auth/verify?token=${encodeURIComponent(verificationToken)}`)
-      .then((data) => notify(data.message))
+      .then((data) => {
+        notify(data.message);
+      })
       .catch((error: ApiError) => {
         notify(error.message, 'error');
-        setVerificationState(error.message.includes('expired') || error.expired ? 'expired' : 'none');
+
+        setVerificationState(
+          error.message.toLowerCase().includes('expired') || error.expired
+            ? 'expired'
+            : 'none',
+        );
       });
   }, [query]);
 
@@ -66,12 +98,14 @@ export default function App() {
     event.preventDefault();
     setMessage('');
     setVerificationState('none');
+
     try {
       if (mode === 'register') {
         await request('/auth/register', 'POST', { email, password });
         notify('Account created. Check your email to verify it.');
       } else if (mode === 'login') {
         const data = await request('/auth/login', 'POST', { email, password });
+
         localStorage.setItem('findit-token', data.token);
         setToken(data.token);
         notify('Signed in.');
@@ -79,7 +113,12 @@ export default function App() {
         const data = await request('/auth/forgot-password', 'POST', { email });
         notify(data.message);
       } else {
-        const data = await request('/auth/reset-password', 'POST', { token: resetToken, password });
+        const data = await request(
+          '/auth/reset-password',
+          'POST',
+          { token: resetToken, password },
+        );
+
         selectMode('login');
         notify(data.message);
         setPassword('');
@@ -87,6 +126,7 @@ export default function App() {
     } catch (error) {
       const err = error as ApiError;
       notify(err.message, 'error');
+
       if (err.unverified || err.message.toLowerCase().includes('verify')) {
         setVerificationState('unverified');
       }
@@ -106,6 +146,7 @@ export default function App() {
   async function submitFound(event: FormEvent) {
     event.preventDefault();
     setMessage('');
+
     try {
       await request('/announcements/found', 'POST', { title, description }, token);
       notify('Found item submitted. A confirmation email was sent.');
@@ -148,20 +189,29 @@ export default function App() {
     <div className="page">
       <header>
         <a href="/">FindIt</a>
+
         {token && (
           <button className="link-button" onClick={logout}>
             Sign out
           </button>
         )}
       </header>
+
       <main>
         {!token ? (
           <section className="card auth-card">
             <h1>{heading}</h1>
-            {mode === 'forgot' && <p className="intro">Enter your school email address.</p>}
-            {mode === 'reset' && (
-              <p className="intro">Choose a password with at least 8 characters and one number.</p>
+
+            {mode === 'forgot' && (
+              <p className="intro">Enter your school email address.</p>
             )}
+
+            {mode === 'reset' && (
+              <p className="intro">
+                Choose a password with at least 8 characters and one number.
+              </p>
+            )}
+
             {(mode === 'login' || mode === 'register') && (
               <div className="tabs">
                 <button
@@ -170,6 +220,7 @@ export default function App() {
                 >
                   Sign in
                 </button>
+
                 <button
                   className={mode === 'register' ? 'active' : ''}
                   onClick={() => selectMode('register')}
@@ -178,6 +229,7 @@ export default function App() {
                 </button>
               </div>
             )}
+
             <form onSubmit={submitAccount}>
               {mode !== 'reset' && (
                 <label>
@@ -191,6 +243,7 @@ export default function App() {
                   />
                 </label>
               )}
+
               {mode !== 'forgot' && (
                 <label>
                   {mode === 'reset' ? 'New password' : 'Password'}
@@ -198,29 +251,46 @@ export default function App() {
                     type="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                    autoComplete={
+                      mode === 'login' ? 'current-password' : 'new-password'
+                    }
                     required
                   />
                 </label>
               )}
-              {mode === 'register' && <small>At least 8 characters and one number.</small>}
+
+              {mode === 'register' && (
+                <small>At least 8 characters and one number.</small>
+              )}
+
               <button className="primary">{action}</button>
             </form>
+
             {mode === 'login' && (
-              <button className="link-button" onClick={() => selectMode('forgot')}>
+              <button
+                className="link-button"
+                onClick={() => selectMode('forgot')}
+              >
                 Forgot password?
               </button>
             )}
+
             {(mode === 'forgot' || mode === 'reset') && (
-              <button className="link-button" onClick={() => selectMode('login')}>
+              <button
+                className="link-button"
+                onClick={() => selectMode('login')}
+              >
                 Back to sign in
               </button>
             )}
-            {(verificationState === 'expired' || verificationState === 'unverified') && (
-              <button className="secondary" onClick={resend}>
-                Resend verification email
-              </button>
-            )}
+
+            {(verificationState === 'expired' ||
+              verificationState === 'unverified') && (
+                <button className="secondary" onClick={resend}>
+                  Resend verification email
+                </button>
+              )}
+
             {message && (
               <p className={`notice ${messageType}`} role="status">
                 {message}
@@ -231,6 +301,7 @@ export default function App() {
           <section className="card found-card">
             <h1>Found an item?</h1>
             <p className="intro">Add the details below.</p>
+
             <form onSubmit={submitFound}>
               <label>
                 Item
@@ -240,6 +311,7 @@ export default function App() {
                   required
                 />
               </label>
+
               <label>
                 Description
                 <textarea
@@ -248,8 +320,10 @@ export default function App() {
                   required
                 />
               </label>
+
               <button className="primary">Submit</button>
             </form>
+
             {message && (
               <p className={`notice ${messageType}`} role="status">
                 {message}

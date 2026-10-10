@@ -1,12 +1,19 @@
+
 import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { CredentialsDto, EmailDto, ResetPasswordDto, TokenQueryDto } from './auth.dto';
+import {
+  CredentialsDto,
+  EmailDto,
+  LoginDto,
+  ResetPasswordDto,
+  TokenQueryDto,
+} from './auth.dto';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new account' })
@@ -28,7 +35,10 @@ export class AuthController {
   @Post('resend-verification')
   @HttpCode(200)
   @ApiOperation({ summary: 'Resend verification email for unverified accounts' })
-  @ApiResponse({ status: 200, description: 'Verification email sent if unverified account exists' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification email sent if unverified account exists',
+  })
   resend(@Body() body: EmailDto) {
     return this.authService.resend(body.email);
   }
@@ -37,8 +47,8 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Sign in with email and password' })
   @ApiResponse({ status: 200, description: 'Signed in, returns session token' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials or unverified account' })
-  login(@Body() body: CredentialsDto) {
+  @ApiResponse({ status: 401, description: 'Invalid email or password' })
+  login(@Body() body: LoginDto) {
     return this.authService.login(body.email, body.password);
   }
 
@@ -63,5 +73,5 @@ export class AuthController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Sign out' })
   @ApiResponse({ status: 204, description: 'Signed out' })
-  logout(): void {}
+  logout(): void { }
 }
