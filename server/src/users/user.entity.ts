@@ -40,7 +40,7 @@ export class User {
   @Column({ name: 'status', type: 'varchar', default: 'active' })
   status!: string;
 
-  @CreateDateColumn({ name: 'created_at' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
   @OneToMany(() => AuthToken, (token) => token.user)
