@@ -9,7 +9,8 @@
     "start": "nest start",
     "test": "jest --runInBand",
     "test:cov": "jest --coverage --runInBand",
-    "migration:run": "typeorm-ts-node-commonjs -d src/data-source.ts migration:run"
+    "migration:run": "typeorm-ts-node-commonjs -d src/data-source.ts migration:run",
+    "migration:check": "typeorm-ts-node-commonjs -d src/data-source.ts migration:generate src/migrations/Pending --check"
   },
   "dependencies": {
     "@nestjs/common": "10.4.15",

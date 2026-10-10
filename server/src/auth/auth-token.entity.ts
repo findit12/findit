@@ -11,7 +11,7 @@ export class AuthToken {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @ManyToOne(() => User, (user) => user.tokens, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.tokens, { onDelete: 'CASCADE', nullable: false })
   user!: User;
 
   @Column({ type: 'varchar' })
