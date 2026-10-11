@@ -25,6 +25,10 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 
+// Multer accepts more than the rules allow, so that checkPhotos() can answer with a clear
+// message ("You can add up to 4 photos.", "... is too large") instead of a generic error.
+const UPLOAD_LIMITS = { files: 10, fileSize: 20 * 1024 * 1024 };
+
 @ApiTags('announcements')
 @Controller('announcements')
 export class AnnouncementsController {
@@ -32,7 +36,7 @@ export class AnnouncementsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FilesInterceptor('photos', 4))
+  @UseInterceptors(FilesInterceptor('photos', UPLOAD_LIMITS.files, { limits: UPLOAD_LIMITS }))
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Declare a found object (1 to 4 photos) or a lost object (0 to 4 photos)' })
