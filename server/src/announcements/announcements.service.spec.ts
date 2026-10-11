@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from '../users/user.entity';
@@ -81,7 +86,13 @@ function storedAnnouncement(overrides: Partial<Announcement> = {}): Announcement
 
 describe('AnnouncementsService', () => {
   let service: AnnouncementsService;
-  let announcements: { create: jest.Mock; save: jest.Mock; findOne: jest.Mock; findOneOrFail: jest.Mock };
+  let announcements: {
+    create: jest.Mock;
+    save: jest.Mock;
+    find: jest.Mock;
+    findOne: jest.Mock;
+    findOneOrFail: jest.Mock;
+  };
   let users: { findOneBy: jest.Mock };
   let reference: { checkSelection: jest.Mock };
   let photoStorage: { save: jest.Mock };
@@ -91,6 +102,7 @@ describe('AnnouncementsService', () => {
     announcements = {
       create: jest.fn((data) => data),
       save: jest.fn((data) => Promise.resolve({ id: 7, ...data })),
+      find: jest.fn(),
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue(storedAnnouncement()),
     };
@@ -208,6 +220,80 @@ describe('AnnouncementsService', () => {
 
       announcements.findOne.mockResolvedValue(storedAnnouncement({ status: AnnouncementStatus.Deleted }));
       await expect(service.findPublic(7)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findMine (SCRUM-18)', () => {
+    it('lists my announcements with their hidden detail', async () => {
+      announcements.find.mockResolvedValue([storedAnnouncement()]);
+      const result = await service.findMine(1);
+
+      expect(announcements.find.mock.calls[0][0].where.authorId).toBe(1);
+      expect(result.announcements[0].hiddenDetail).toBe('Cat sticker on the back');
+    });
+
+    it('gives one of my announcements to the edit page, but not someone else\'s', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await expect(service.findMineById(1, 7)).resolves.toBeDefined();
+      await expect(service.findMineById(2, 7)).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('update (SCRUM-18)', () => {
+    it('changes only the fields that are sent', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await service.update(1, 7, { title: 'Black iPhone', brand: '' });
+
+      const saved = announcements.save.mock.calls[0][0];
+      expect(saved.title).toBe('Black iPhone');
+      expect(saved.brand).toBeNull();
+      expect(saved.description).toBe('Found under a table');
+      expect(saved).not.toHaveProperty('category'); // relations removed before saving
+      expect(reference.checkSelection).not.toHaveBeenCalled();
+    });
+
+    it('checks the new combination when the category, object or place changes', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await service.update(1, 7, { placeId: 5 });
+      expect(reference.checkSelection).toHaveBeenCalledWith(1, 2, 5);
+    });
+
+    it('refuses the edit of someone else\'s announcement (403)', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ authorId: 2 }));
+      await expect(service.update(1, 7, { title: 'X' })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('refuses the edit of a deleted announcement (404)', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ status: AnnouncementStatus.Deleted }));
+      await expect(service.update(1, 7, { title: 'X' })).rejects.toThrow(NotFoundException);
+    });
+
+    it('refuses the edit of a final status (409)', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ status: AnnouncementStatus.Returned }));
+      await expect(service.update(1, 7, { title: 'X' })).rejects.toThrow(ConflictException);
+    });
+
+    it('refuses an empty hidden detail on a found announcement and a future date', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await expect(service.update(1, 7, { hiddenDetail: '' })).rejects.toThrow(BadRequestException);
+      await expect(service.update(1, 7, { eventDate: '2999-01-01' })).rejects.toThrow(BadRequestException);
+      expect(announcements.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('remove (SCRUM-18)', () => {
+    it('sets the status to Deleted instead of erasing the row', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await service.remove(1, 7);
+      expect(announcements.save.mock.calls[0][0].status).toBe(AnnouncementStatus.Deleted);
+    });
+
+    it('refuses to delete someone else\'s announcement or a final one', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ authorId: 2 }));
+      await expect(service.remove(1, 7)).rejects.toThrow(ForbiddenException);
+
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ status: AnnouncementStatus.Archived }));
+      await expect(service.remove(1, 7)).rejects.toThrow(ConflictException);
     });
   });
 });

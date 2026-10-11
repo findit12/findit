@@ -23,9 +23,14 @@ export default function Layout() {
       <header>
         <Link to="/">FindIt</Link>
         {token && (
-          <button className="link-button" onClick={logout}>
-            Sign out
-          </button>
+          <nav className="header-links">
+            <Link className="link-button" to="/my-announcements">
+              My announcements
+            </Link>
+            <button className="link-button" onClick={logout}>
+              Sign out
+            </button>
+          </nav>
         )}
       </header>
       <main>

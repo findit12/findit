@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
-import { Announcement } from '../types/announcement';
+import { useAuth } from '../auth/AuthContext';
+import { Announcement, isEditable } from '../types/announcement';
 
 // Detail page of one announcement: /announcements/:id. The hidden detail is never shown here.
 export default function AnnouncementDetailPage() {
   const { id } = useParams();
   const location = useLocation();
-  const justCreated = (location.state as { created?: boolean } | null)?.created ?? false;
+  const navigate = useNavigate();
+  const { token, userId } = useAuth();
+  // A message sent by the previous page, for example after a creation or an edit.
+  const notice = (location.state as { notice?: string } | null)?.notice ?? '';
 
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [error, setError] = useState('');
@@ -17,6 +21,18 @@ export default function AnnouncementDetailPage() {
       .then((data) => setAnnouncement(data.announcement))
       .catch((err: Error) => setError(err.message));
   }, [id]);
+
+  async function remove() {
+    if (!announcement || !window.confirm(`Delete "${announcement.title}"? It will disappear from FindIt.`)) {
+      return;
+    }
+    try {
+      await apiRequest(`/announcements/${announcement.id}`, { method: 'DELETE', token });
+      navigate('/my-announcements', { state: { notice: 'Announcement deleted.' } });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
 
   if (error) {
     return (
@@ -31,9 +47,9 @@ export default function AnnouncementDetailPage() {
 
   return (
     <section className="card wide-card detail">
-      {justCreated && (
+      {notice && (
         <p className="notice success" role="status">
-          Your announcement is published. A confirmation email is on its way.
+          {notice}
         </p>
       )}
 
@@ -82,6 +98,18 @@ export default function AnnouncementDetailPage() {
         <dt>Status</dt>
         <dd>{announcement.status}</dd>
       </dl>
+
+      {/* Only the author sees these buttons. The server checks it again on every request. */}
+      {announcement.authorId === userId && isEditable(announcement) && (
+        <div className="owner-actions">
+          <Link className="secondary button-link" to={`/announcements/${announcement.id}/edit`}>
+            Edit
+          </Link>
+          <button className="secondary danger" onClick={remove}>
+            Delete
+          </button>
+        </div>
+      )}
     </section>
   );
 }

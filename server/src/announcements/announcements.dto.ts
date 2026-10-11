@@ -102,3 +102,76 @@ export class CreateAnnouncementDto {
   @IsOptional()
   photos?: unknown;
 }
+
+// Fields that the author can change (SCRUM-18 and SCRUM-21), sent as JSON. Every field is
+// optional: only the fields present in the request are changed. The type, the current location
+// and the photos cannot be changed here.
+export class UpdateAnnouncementDto {
+  @ApiPropertyOptional({ maxLength: 100 })
+  @Trim()
+  @IsOptional()
+  @MaxLength(100)
+  @IsString()
+  @IsNotEmpty({ message: 'Enter a title.' })
+  title?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a category.' })
+  categoryId?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a precise object.' })
+  objectTypeId?: number;
+
+  @ApiPropertyOptional({ maxLength: 1000 })
+  @Trim()
+  @IsOptional()
+  @MaxLength(1000)
+  @IsString()
+  @IsNotEmpty({ message: 'Enter a description.' })
+  description?: string;
+
+  @ApiPropertyOptional({ maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  brand?: string;
+
+  @ApiPropertyOptional({ maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  color?: string;
+
+  @ApiPropertyOptional({ example: '2026-10-10' })
+  @IsOptional()
+  @IsDateString({ strict: true }, { message: 'Enter a valid date.' })
+  eventDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a place.' })
+  placeId?: number;
+
+  @ApiPropertyOptional({ maxLength: 200 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  placeDetails?: string;
+
+  // For a found object, the service refuses an empty hidden detail.
+  @ApiPropertyOptional({ maxLength: 200 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  hiddenDetail?: string;
+}

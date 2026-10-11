@@ -7,12 +7,16 @@ import { AnnouncementsService } from './announcements.service';
 
 describe('AnnouncementsController', () => {
   let controller: AnnouncementsController;
-  let service: { create: jest.Mock; findPublic: jest.Mock };
+  let service: Record<'create' | 'findPublic' | 'findMine' | 'findMineById' | 'update' | 'remove', jest.Mock>;
 
   beforeEach(async () => {
     service = {
       create: jest.fn().mockResolvedValue({ announcement: { id: 1 } }),
       findPublic: jest.fn().mockResolvedValue({ announcement: { id: 1 } }),
+      findMine: jest.fn(),
+      findMineById: jest.fn(),
+      update: jest.fn(),
+      remove: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -38,5 +42,17 @@ describe('AnnouncementsController', () => {
   it('reads one announcement through the public view', async () => {
     await controller.findOne(1);
     expect(service.findPublic).toHaveBeenCalledWith(1);
+  });
+
+  it('passes the signed-in user to the "mine", edit and delete routes (SCRUM-18)', async () => {
+    await controller.findMine(5);
+    await controller.findMineById(5, 1);
+    await controller.update(5, 1, { title: 'New title' });
+    await controller.remove(5, 1);
+
+    expect(service.findMine).toHaveBeenCalledWith(5);
+    expect(service.findMineById).toHaveBeenCalledWith(5, 1);
+    expect(service.update).toHaveBeenCalledWith(5, 1, { title: 'New title' });
+    expect(service.remove).toHaveBeenCalledWith(5, 1);
   });
 });

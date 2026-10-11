@@ -1,4 +1,5 @@
-// Shapes of the data exchanged with the API. The names follow the SDD and the server code.
+// Shapes of the data exchanged with the API, and small rules about them.
+// The names follow the SDD and the server code.
 
 export type AnnouncementType = 'found' | 'lost';
 export type CurrentLocation = 'finder' | 'reception';
@@ -60,4 +61,9 @@ export interface AnnouncementFormValues {
   placeDetails: string;
   currentLocation: CurrentLocation | '';
   hiddenDetail: string;
+}
+
+// An announcement can be changed only while it is active (same rule as the server).
+export function isEditable(announcement: Announcement): boolean {
+  return announcement.status === 'Available' || announcement.status === 'Open';
 }

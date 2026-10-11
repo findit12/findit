@@ -426,3 +426,94 @@ select:disabled {
   padding: 12px 14px;
   font-size: 0.84rem;
 }
+/* ---------- My announcements, edit and delete (SCRUM-18) ---------- */
+
+/* The header links ("header a" gives the logo style, so these links get their own). */
+.header-links {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+header .header-links a {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #537269;
+}
+
+header .header-links a::before {
+  content: none;
+}
+
+.my-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+}
+
+.my-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e0e6dd;
+  border-radius: 10px;
+}
+
+.my-list li > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.my-title {
+  color: #173f35;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.status {
+  font-size: 0.72rem;
+  color: #75847e;
+}
+
+.row-actions {
+  display: flex;
+  gap: 14px;
+}
+
+.owner-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.owner-actions .secondary {
+  margin-top: 0;
+  text-align: center;
+  font-size: 0.84rem;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.danger {
+  color: #a64c3e;
+}
+
+.my-list .badge {
+  margin-bottom: 0;
+}
+
+.my-labels {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.my-list small {
+  margin-top: 0;
+}
