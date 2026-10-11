@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
-import { AnnouncementFormValues, AnnouncementType, ReferenceData } from '../types/announcement';
+import { Announcement, AnnouncementFormValues, AnnouncementType, ReferenceData } from '../types/announcement';
 
 const MAX_PHOTOS = 4;
 
@@ -28,11 +28,30 @@ export function emptyValues(type: AnnouncementType): AnnouncementFormValues {
   };
 }
 
+// Fills the form with an existing announcement, for the edit page.
+export function valuesFromAnnouncement(announcement: Announcement): AnnouncementFormValues {
+  return {
+    type: announcement.type,
+    title: announcement.title,
+    categoryId: String(announcement.category.id),
+    objectTypeId: String(announcement.objectType.id),
+    description: announcement.description,
+    brand: announcement.brand ?? '',
+    color: announcement.color ?? '',
+    eventDate: announcement.eventDate,
+    placeId: String(announcement.place.id),
+    placeDetails: announcement.placeDetails ?? '',
+    currentLocation: announcement.currentLocation ?? '',
+    hiddenDetail: announcement.hiddenDetail ?? '',
+  };
+}
+
 interface AnnouncementFormProps {
   type: AnnouncementType;
   reference: ReferenceData;
   initialValues?: AnnouncementFormValues;
-  withPhotos: boolean; // true to create, false to edit (the photos are not changed when editing)
+  // "create": photos and current location are asked. "edit": they are not changed.
+  mode: 'create' | 'edit';
   submitLabel: string;
   // Called with the typed values and the chosen photos. If it throws, the error is shown
   // and every value stays in the form.
@@ -41,8 +60,9 @@ interface AnnouncementFormProps {
 
 // The declaration form, shared by "I found an object", "I lost an object" and the edit page.
 export default function AnnouncementForm(props: AnnouncementFormProps) {
-  const { type, reference, withPhotos, submitLabel, onSubmit } = props;
+  const { type, reference, mode, submitLabel, onSubmit } = props;
   const isFound = type === 'found';
+  const isCreate = mode === 'create';
 
   const [values, setValues] = useState<AnnouncementFormValues>(props.initialValues ?? emptyValues(type));
   const [photos, setPhotos] = useState<File[]>([]);
@@ -82,7 +102,7 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
     event.preventDefault();
     setError('');
 
-    if (withPhotos && isFound && photos.length === 0) {
+    if (isCreate && isFound && photos.length === 0) {
       setError('Add at least one photo.');
       return;
     }
@@ -195,7 +215,7 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
         />
       </label>
 
-      {isFound && (
+      {isCreate && isFound && (
         <fieldset className="choice">
           <legend>Where is the object now?</legend>
           <label>
@@ -233,7 +253,7 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
         />
       </label>
 
-      {withPhotos && (
+      {isCreate && (
         <div className="photos-field">
           <span className="field-title">
             Photos {isFound ? '(1 to 4)' : <span className="optional">(optional, up to 4)</span>}

@@ -5,6 +5,8 @@ import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import NewAnnouncementPage from './pages/NewAnnouncementPage';
 import AnnouncementDetailPage from './pages/AnnouncementDetailPage';
+import EditAnnouncementPage from './pages/EditAnnouncementPage';
+import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -31,6 +33,22 @@ export default function App() {
           }
         />
         <Route path="/announcements/:id" element={<AnnouncementDetailPage />} />
+        <Route
+          path="/announcements/:id/edit"
+          element={
+            <RequireAuth>
+              <EditAnnouncementPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/my-announcements"
+          element={
+            <RequireAuth>
+              <MyAnnouncementsPage />
+            </RequireAuth>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

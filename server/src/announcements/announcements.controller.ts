@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
+  Patch,
   Post,
   UploadedFiles,
   UseGuards,
@@ -19,7 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateAnnouncementDto } from './announcements.dto';
+import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 
 @ApiTags('announcements')
@@ -42,6 +45,53 @@ export class AnnouncementsController {
     @UploadedFiles() files: Express.Multer.File[] = [],
   ) {
     return this.service.create(userId, dto, files);
+  }
+
+  // The "mine" routes are written before ":id", otherwise "mine" would be read as an id.
+  @Get('mine')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List my announcements (with their hidden detail)' })
+  @ApiResponse({ status: 200, description: 'My announcements, newest first, deleted ones excluded' })
+  findMine(@CurrentUserId() userId: number) {
+    return this.service.findMine(userId);
+  }
+
+  @Get('mine/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Read one of my announcements, for the edit page' })
+  @ApiResponse({ status: 403, description: 'Not the author' })
+  @ApiResponse({ status: 404, description: 'Announcement not found' })
+  findMineById(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.service.findMineById(userId, id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Edit my announcement (author only)' })
+  @ApiResponse({ status: 200, description: 'Announcement updated' })
+  @ApiResponse({ status: 403, description: 'Not the author' })
+  @ApiResponse({ status: 409, description: 'The announcement can no longer be changed' })
+  update(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateAnnouncementDto,
+  ) {
+    return this.service.update(userId, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete my announcement (logical deletion, author only)' })
+  @ApiResponse({ status: 204, description: 'Announcement deleted' })
+  @ApiResponse({ status: 403, description: 'Not the author' })
+  @ApiResponse({ status: 409, description: 'The announcement can no longer be changed' })
+  remove(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(userId, id);
   }
 
   @Get(':id')

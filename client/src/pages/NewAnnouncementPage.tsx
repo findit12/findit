@@ -37,7 +37,9 @@ export default function NewAnnouncementPage() {
         body,
         token,
       });
-      navigate(`/announcements/${data.announcement.id}`, { state: { created: true } });
+      navigate(`/announcements/${data.announcement.id}`, {
+        state: { notice: 'Your announcement is published. A confirmation email is on its way.' },
+      });
     } catch (error) {
       if ((error as ApiError).status === 401) {
         signOut(); // the session has expired: back to the sign-in page
@@ -57,7 +59,7 @@ export default function NewAnnouncementPage() {
       {loadError && <p className="notice error">{loadError}</p>}
       {reference && (
         // key={type}: switching between "found" and "lost" starts a new, empty form.
-        <AnnouncementForm key={type} type={type} reference={reference} withPhotos submitLabel="Publish" onSubmit={send} />
+        <AnnouncementForm key={type} type={type} reference={reference} mode="create" submitLabel="Publish" onSubmit={send} />
       )}
     </section>
   );

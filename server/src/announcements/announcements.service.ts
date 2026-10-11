@@ -1,15 +1,26 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
 import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
-import { CreateAnnouncementDto } from './announcements.dto';
+import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { PhotoStorageService } from './photo-storage.service';
 
 const DAYS_BEFORE_ARCHIVE = 90;
+
+// The author can only change an announcement that is still active (SDD: Returned, Closed,
+// Deleted and Archived are final; Hidden is decided by an administrator).
+const EDITABLE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
 
 // Turns an empty optional field ("") into null, so the database stores "no value".
 function emptyToNull(value?: string): string | null {
@@ -108,6 +119,95 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
     return { announcement: toPublicView(announcement) };
+  }
+
+  // SCRUM-18: the announcements of the signed-in user, newest first, with their hidden detail.
+  async findMine(userId: number) {
+    const announcements = await this.announcements.find({
+      where: { authorId: userId, status: Not(AnnouncementStatus.Deleted) },
+      relations: { category: true, objectType: true, place: true },
+      order: { createdAt: 'DESC' },
+    });
+    return { announcements: announcements.map(toOwnerView) };
+  }
+
+  // SCRUM-18: one announcement of the signed-in user, for the edit page.
+  async findMineById(userId: number, id: number) {
+    return { announcement: toOwnerView(await this.findOwned(userId, id)) };
+  }
+
+  // SCRUM-18: the author changes some fields of an active announcement.
+  async update(userId: number, id: number, dto: UpdateAnnouncementDto) {
+    const announcement = await this.findOwned(userId, id);
+    this.assertEditable(announcement);
+
+    if (dto.eventDate !== undefined && dto.eventDate > today()) {
+      throw new BadRequestException('The date cannot be in the future.');
+    }
+    if (dto.hiddenDetail === '' && announcement.type === AnnouncementType.Found) {
+      throw new BadRequestException('Enter a hidden detail that only the owner knows.');
+    }
+
+    // If one of the three choices changes, the new combination is checked as a whole.
+    const categoryId = dto.categoryId ?? announcement.categoryId;
+    const objectTypeId = dto.objectTypeId ?? announcement.objectTypeId;
+    const placeId = dto.placeId ?? announcement.placeId;
+    if (dto.categoryId !== undefined || dto.objectTypeId !== undefined || dto.placeId !== undefined) {
+      await this.reference.checkSelection(categoryId, objectTypeId, placeId);
+    }
+
+    // Copies the fields that are present in the request. "undefined" means "not sent".
+    if (dto.title !== undefined) announcement.title = dto.title;
+    if (dto.description !== undefined) announcement.description = dto.description;
+    if (dto.brand !== undefined) announcement.brand = emptyToNull(dto.brand);
+    if (dto.color !== undefined) announcement.color = emptyToNull(dto.color);
+    if (dto.eventDate !== undefined) announcement.eventDate = dto.eventDate;
+    if (dto.placeDetails !== undefined) announcement.placeDetails = emptyToNull(dto.placeDetails);
+    if (dto.hiddenDetail !== undefined) announcement.hiddenDetail = emptyToNull(dto.hiddenDetail);
+    announcement.categoryId = categoryId;
+    announcement.objectTypeId = objectTypeId;
+    announcement.placeId = placeId;
+
+    await this.saveFields(announcement);
+    return { announcement: toOwnerView(await this.findWithDetails(id)) };
+  }
+
+  // SCRUM-18: logical deletion. The row stays in the database with the status Deleted.
+  async remove(userId: number, id: number): Promise<void> {
+    const announcement = await this.findOwned(userId, id);
+    this.assertEditable(announcement);
+    announcement.status = AnnouncementStatus.Deleted;
+    await this.saveFields(announcement);
+  }
+
+  // Finds an announcement and checks that the signed-in user is its author.
+  // 404 if it does not exist (or is deleted), 403 if it belongs to someone else.
+  private async findOwned(userId: number, id: number): Promise<Announcement> {
+    const announcement = await this.announcements.findOne({
+      where: { id },
+      relations: { category: true, objectType: true, place: true },
+    });
+    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
+      throw new NotFoundException('Announcement not found.');
+    }
+    if (announcement.authorId !== userId) {
+      throw new ForbiddenException('You can only change your own announcements.');
+    }
+    return announcement;
+  }
+
+  // 409 if the announcement is no longer active (SDD: invalid transition).
+  private assertEditable(announcement: Announcement): void {
+    if (!EDITABLE_STATUSES.includes(announcement.status)) {
+      throw new ConflictException(`This announcement is ${announcement.status} and can no longer be changed.`);
+    }
+  }
+
+  // Saves the changed columns only. The loaded relations are removed first, otherwise TypeORM
+  // would take the old category, precise object or place from them instead of the new ids.
+  private async saveFields(announcement: Announcement): Promise<void> {
+    const { category, objectType, place, author, ...columns } = announcement;
+    await this.announcements.save(columns);
   }
 
   // Loads an announcement with the names of its category, precise object and place.
