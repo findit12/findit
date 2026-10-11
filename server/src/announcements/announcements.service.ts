@@ -14,6 +14,7 @@ import { ReferenceService } from '../reference/reference.service';
 import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
+import { checkPhotos } from './photo-rules';
 import { PhotoStorageService } from './photo-storage.service';
 
 const DAYS_BEFORE_ARCHIVE = 90;
@@ -61,6 +62,7 @@ export class AnnouncementsService {
     if (isFound && files.length < 1) {
       throw new BadRequestException('Add at least one photo.');
     }
+    checkPhotos(files); // SCRUM-19: at most 4 photos, 5 MB each, real JPEG, PNG or WebP
     if (dto.eventDate > today()) {
       throw new BadRequestException('The date cannot be in the future.');
     }

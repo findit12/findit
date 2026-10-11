@@ -151,6 +151,13 @@ describe('AnnouncementsService', () => {
       expect(announcements.save).not.toHaveBeenCalled();
     });
 
+    it('refuses an invalid photo before saving anything (SCRUM-19)', async () => {
+      const fake = { originalname: 'notes.jpg', size: 12, buffer: Buffer.from('not an image') } as Express.Multer.File;
+      await expect(service.create(1, foundForm(), [fake])).rejects.toThrow('"notes.jpg" is not a JPEG, PNG or WebP image.');
+      expect(photoStorage.save).not.toHaveBeenCalled();
+      expect(announcements.save).not.toHaveBeenCalled();
+    });
+
     it('refuses a date in the future', async () => {
       const form = { ...foundForm(), eventDate: '2999-01-01' };
       await expect(service.create(1, form, [photo()])).rejects.toThrow('The date cannot be in the future.');
