@@ -139,9 +139,14 @@ export class AnnouncementsService {
   }
 
   // SCRUM-18: the author changes some fields of an active announcement.
+  // SCRUM-21: the author of a lost announcement can also close it (status: Closed).
   async update(userId: number, id: number, dto: UpdateAnnouncementDto) {
     const announcement = await this.findOwned(userId, id);
     this.assertEditable(announcement);
+
+    if (dto.status === AnnouncementStatus.Closed && announcement.type !== AnnouncementType.Lost) {
+      throw new ConflictException('Only a lost announcement can be closed.');
+    }
 
     if (dto.eventDate !== undefined && dto.eventDate > today()) {
       throw new BadRequestException('The date cannot be in the future.');
@@ -169,6 +174,9 @@ export class AnnouncementsService {
     announcement.categoryId = categoryId;
     announcement.objectTypeId = objectTypeId;
     announcement.placeId = placeId;
+    if (dto.status === AnnouncementStatus.Closed) {
+      announcement.status = AnnouncementStatus.Closed; // final status: no more edit or delete
+    }
 
     await this.saveFields(announcement);
     return { announcement: toOwnerView(await this.findWithDetails(id)) };

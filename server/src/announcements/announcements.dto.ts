@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -10,7 +11,7 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
-import { AnnouncementType, CurrentLocation } from './announcement.entity';
+import { AnnouncementStatus, AnnouncementType, CurrentLocation } from './announcement.entity';
 
 // Removes the spaces at the start and at the end of a text field.
 const Trim = () => Transform(({ value }) => (typeof value === 'string' ? value.trim() : value));
@@ -107,6 +108,12 @@ export class CreateAnnouncementDto {
 // optional: only the fields present in the request are changed. The type, the current location
 // and the photos cannot be changed here.
 export class UpdateAnnouncementDto {
+  // SCRUM-21: the author of a lost announcement closes it once the object is back (Open -> Closed).
+  @ApiPropertyOptional({ enum: [AnnouncementStatus.Closed], description: 'Lost announcements only' })
+  @IsOptional()
+  @IsIn([AnnouncementStatus.Closed], { message: 'The only status you can set is Closed.' })
+  status?: AnnouncementStatus.Closed;
+
   @ApiPropertyOptional({ maxLength: 100 })
   @Trim()
   @IsOptional()

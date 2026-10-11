@@ -303,4 +303,44 @@ describe('AnnouncementsService', () => {
       await expect(service.remove(1, 7)).rejects.toThrow(ConflictException);
     });
   });
+
+  describe('close a lost announcement (SCRUM-21)', () => {
+    it('closes my open lost announcement', async () => {
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ type: AnnouncementType.Lost, status: AnnouncementStatus.Open, currentLocation: null }),
+      );
+      await service.update(1, 7, { status: AnnouncementStatus.Closed });
+      expect(announcements.save.mock.calls[0][0].status).toBe(AnnouncementStatus.Closed);
+    });
+
+    it('refuses to close a found announcement (409)', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      await expect(service.update(1, 7, { status: AnnouncementStatus.Closed })).rejects.toThrow(
+        'Only a lost announcement can be closed.',
+      );
+    });
+
+    it('refuses to change a closed announcement again (409)', async () => {
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ type: AnnouncementType.Lost, status: AnnouncementStatus.Closed }),
+      );
+      await expect(service.update(1, 7, { title: 'X' })).rejects.toThrow(ConflictException);
+      await expect(service.remove(1, 7)).rejects.toThrow(ConflictException);
+    });
+
+    it('accepts an empty hidden detail on a lost announcement (it is optional)', async () => {
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ type: AnnouncementType.Lost, status: AnnouncementStatus.Open }),
+      );
+      await service.update(1, 7, { hiddenDetail: '' });
+      expect(announcements.save.mock.calls[0][0].hiddenDetail).toBeNull();
+    });
+
+    it('refuses to close someone else\'s lost announcement (403)', async () => {
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ type: AnnouncementType.Lost, status: AnnouncementStatus.Open, authorId: 2 }),
+      );
+      await expect(service.update(1, 7, { status: AnnouncementStatus.Closed })).rejects.toThrow(ForbiddenException);
+    });
+  });
 });

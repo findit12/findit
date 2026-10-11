@@ -74,10 +74,10 @@ export class AnnouncementsController {
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Edit my announcement (author only)' })
+  @ApiOperation({ summary: 'Edit my announcement, or close my lost announcement with status "Closed" (author only)' })
   @ApiResponse({ status: 200, description: 'Announcement updated' })
   @ApiResponse({ status: 403, description: 'Not the author' })
-  @ApiResponse({ status: 409, description: 'The announcement can no longer be changed' })
+  @ApiResponse({ status: 409, description: 'Final status, or closing a found announcement' })
   update(
     @CurrentUserId() userId: number,
     @Param('id', ParseIntPipe) id: number,

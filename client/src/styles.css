@@ -517,3 +517,8 @@ header .header-links a::before {
 .my-list small {
   margin-top: 0;
 }
+/* ---------- Close a lost announcement (SCRUM-21) ---------- */
+
+.owner-actions .close-button {
+  grid-column: 1 / -1;
+}
