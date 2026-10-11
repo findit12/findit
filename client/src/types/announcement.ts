@@ -67,3 +67,8 @@ export interface AnnouncementFormValues {
 export function isEditable(announcement: Announcement): boolean {
   return announcement.status === 'Available' || announcement.status === 'Open';
 }
+
+// SCRUM-21: only an open lost announcement can be closed by its author.
+export function isClosable(announcement: Announcement): boolean {
+  return announcement.type === 'lost' && announcement.status === 'Open';
+}

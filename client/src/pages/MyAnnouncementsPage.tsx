@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
-import { Announcement, isEditable } from '../types/announcement';
+import { Announcement, isClosable, isEditable } from '../types/announcement';
 
 // Page "My announcements": the list of the announcements of the signed-in user.
 export default function MyAnnouncementsPage() {
@@ -29,6 +29,25 @@ export default function MyAnnouncementsPage() {
     try {
       await apiRequest(`/announcements/${announcement.id}`, { method: 'DELETE', token });
       setAnnouncements((current) => (current ?? []).filter((item) => item.id !== announcement.id));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  // SCRUM-21: closes a lost announcement and shows its new status in the list.
+  async function close(announcement: Announcement) {
+    if (!window.confirm(`Close "${announcement.title}"? Do it once you have your object back.`)) {
+      return;
+    }
+    try {
+      const data = await apiRequest<{ announcement: Announcement }>(`/announcements/${announcement.id}`, {
+        method: 'PATCH',
+        token,
+        body: { status: 'Closed' },
+      });
+      setAnnouncements((current) =>
+        (current ?? []).map((item) => (item.id === announcement.id ? data.announcement : item)),
+      );
     } catch (err) {
       setError((err as Error).message);
     }
@@ -69,6 +88,11 @@ export default function MyAnnouncementsPage() {
                   <button className="link-button danger" onClick={() => remove(announcement)}>
                     Delete
                   </button>
+                  {isClosable(announcement) && (
+                    <button className="link-button" onClick={() => close(announcement)}>
+                      Close
+                    </button>
+                  )}
                 </div>
               )}
             </li>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
 import { useAuth } from '../auth/AuthContext';
-import { Announcement, isEditable } from '../types/announcement';
+import { Announcement, isClosable, isEditable } from '../types/announcement';
 
 // Detail page of one announcement: /announcements/:id. The hidden detail is never shown here.
 export default function AnnouncementDetailPage() {
@@ -29,6 +29,23 @@ export default function AnnouncementDetailPage() {
     try {
       await apiRequest(`/announcements/${announcement.id}`, { method: 'DELETE', token });
       navigate('/my-announcements', { state: { notice: 'Announcement deleted.' } });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  // SCRUM-21: "I got it back" closes a lost announcement. Closed is a final status.
+  async function close() {
+    if (!announcement || !window.confirm(`Close "${announcement.title}"? Do it once you have your object back.`)) {
+      return;
+    }
+    try {
+      const data = await apiRequest<{ announcement: Announcement }>(`/announcements/${announcement.id}`, {
+        method: 'PATCH',
+        token,
+        body: { status: 'Closed' },
+      });
+      setAnnouncement(data.announcement);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -108,6 +125,11 @@ export default function AnnouncementDetailPage() {
           <button className="secondary danger" onClick={remove}>
             Delete
           </button>
+          {isClosable(announcement) && (
+            <button className="primary close-button" onClick={close}>
+              I got it back: close the announcement
+            </button>
+          )}
         </div>
       )}
     </section>
