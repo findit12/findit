@@ -31,8 +31,9 @@ export class User {
   @Column({ name: 'last_name', type: 'varchar', nullable: true })
   lastName?: string | null;
 
-  @Column({ name: 'gdpr_consent', type: 'boolean', default: false })
-  gdprConsent!: boolean;
+  // When the user accepted the privacy policy (GDPR, SDD section 4). Empty for accounts created before.
+  @Column({ name: 'consent_at', type: 'timestamptz', nullable: true })
+  consentAt!: Date | null;
 
   @Column({ name: 'role', type: 'varchar', default: 'student' })
   role!: string;

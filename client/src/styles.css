@@ -522,3 +522,21 @@ header .header-links a::before {
 .owner-actions .close-button {
   grid-column: 1 / -1;
 }
+
+
+/* ---------- Registration: name and GDPR consent (FR-01) ---------- */
+
+/* The checkbox sits on the left of its text (the other labels put the field under the text). */
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.consent input {
+  width: auto;
+  margin-top: 3px;
+}

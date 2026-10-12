@@ -1,5 +1,9 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import { Equals, IsEmail, IsNotEmpty, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+
+// Removes the spaces before and after a text, so that "   " counts as empty.
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 export class CredentialsDto {
   @ApiProperty({ example: 'student@your-school.edu', description: 'School email address' })
@@ -12,20 +16,24 @@ export class CredentialsDto {
   @Matches(/\d/, { message: 'Password must be at least 8 characters and include a number.' })
   password!: string;
 
-  @ApiPropertyOptional({ example: 'John', description: 'First name' })
-  @IsOptional()
+  // FR-01: first name, last name and GDPR consent are required to create an account.
+  @ApiProperty({ example: 'Elea', description: 'First name' })
+  @Transform(trim)
   @IsString()
-  firstName?: string;
+  @MaxLength(60, { message: 'The first name must be 60 characters or fewer.' })
+  @IsNotEmpty({ message: 'Enter your first name.' })
+  firstName!: string;
 
-  @ApiPropertyOptional({ example: 'Doe', description: 'Last name' })
-  @IsOptional()
+  @ApiProperty({ example: 'Schom', description: 'Last name' })
+  @Transform(trim)
   @IsString()
-  lastName?: string;
+  @MaxLength(60, { message: 'The last name must be 60 characters or fewer.' })
+  @IsNotEmpty({ message: 'Enter your last name.' })
+  lastName!: string;
 
-  @ApiPropertyOptional({ example: true, description: 'GDPR consent' })
-  @IsOptional()
-  @IsBoolean()
-  gdprConsent?: boolean;
+  @ApiProperty({ example: true, description: 'GDPR consent: must be true to create an account' })
+  @Equals(true, { message: 'You must accept the privacy policy to create an account.' })
+  gdprConsent!: boolean;
 }
 
 export class EmailDto {
@@ -65,4 +73,3 @@ export class LoginDto {
   @IsNotEmpty()
   password!: string;
 }
-

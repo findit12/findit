@@ -18,8 +18,7 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register a new account' })
   @ApiResponse({ status: 201, description: 'Account created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid email domain or weak password' })
-  @ApiResponse({ status: 409, description: 'Account already exists' })
+  @ApiResponse({ status: 400, description: 'Invalid email domain, weak password, missing name or no GDPR consent' })  @ApiResponse({ status: 409, description: 'Account already exists' })
   register(@Body() body: CredentialsDto) {
     return this.authService.register(body);
   }

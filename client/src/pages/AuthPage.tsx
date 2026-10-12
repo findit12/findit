@@ -19,6 +19,10 @@ export default function AuthPage() {
   const [mode, setMode] = useState<Mode>(location.pathname === '/reset-password' ? 'reset' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Registration only (FR-01): name and GDPR consent.
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [consent, setConsent] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [verificationState, setVerificationState] = useState<'none' | 'expired' | 'unverified'>('none');
@@ -61,7 +65,10 @@ export default function AuthPage() {
 
     try {
       if (mode === 'register') {
-        await apiRequest('/auth/register', { method: 'POST', body: { email, password } });
+        await apiRequest('/auth/register', {
+          method: 'POST',
+          body: { email, password, firstName, lastName, gdprConsent: consent },
+        });
         notify('Account created. Check your email to verify it.');
       } else if (mode === 'login') {
         const data = await apiRequest('/auth/login', { method: 'POST', body: { email, password } });
@@ -128,6 +135,30 @@ export default function AuthPage() {
       )}
 
       <form onSubmit={submitAccount}>
+        {mode === 'register' && (
+          <div className="field-row">
+            <label>
+              First name
+              <input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                autoComplete="given-name"
+                maxLength={60}
+                required
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                value={lastName}
+                onChange={(event) => setLastName(event.target.value)}
+                autoComplete="family-name"
+                maxLength={60}
+                required
+              />
+            </label>
+          </div>
+        )}
         {mode !== 'reset' && (
           <label>
             School email
@@ -153,6 +184,12 @@ export default function AuthPage() {
           </label>
         )}
         {mode === 'register' && <small>At least 8 characters and one number.</small>}
+        {mode === 'register' && (
+          <label className="consent">
+            <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} required />
+            <span>I agree that FindIt stores my name and school email to run the service (GDPR).</span>
+          </label>
+        )}
         <button className="primary">{action}</button>
       </form>
 
