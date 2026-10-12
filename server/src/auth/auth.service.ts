@@ -72,6 +72,16 @@ export class AuthService {
       throw new BadRequestException('Password must be at least 8 characters and include a number.');
     }
 
+    // FR-01: no account without a name and the GDPR consent (the DTO checks it too).
+    const firstName = dto.firstName?.trim();
+    const lastName = dto.lastName?.trim();
+    if (!firstName || !lastName) {
+      throw new BadRequestException('Enter your first name and last name.');
+    }
+    if (dto.gdprConsent !== true) {
+      throw new BadRequestException('You must accept the privacy policy to create an account.');
+    }
+
     const existing = await this.users.findOneBy({ email });
     if (existing) {
       throw new ConflictException('An account with this email already exists.');
@@ -83,9 +93,9 @@ export class AuthService {
         email,
         passwordHash,
         isVerified: false,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-        gdprConsent: dto.gdprConsent ?? false,
+        firstName,
+        lastName,
+        consentAt: new Date(),
       }),
     );
 

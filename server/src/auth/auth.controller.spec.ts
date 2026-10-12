@@ -49,15 +49,38 @@ describe('AuthController (HTTP)', () => {
     await app.close();
   });
 
+  // A valid registration form (FR-01).
+  const registration = {
+    email: 'student@school.edu',
+    password: 'Password123',
+    firstName: 'Elea',
+    lastName: 'Schom',
+    gdprConsent: true,
+  };
+
   it('POST /api/auth/register returns 201 and user object', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({ email: 'student@school.edu', password: 'Password123' })
+      .send(registration)
       .expect(201);
 
     expect(res.body).toEqual({
       user: { id: 1, email: 'student@school.edu', is_verified: false },
     });
+  });
+
+  it('POST /api/auth/register refuses a form without the GDPR consent or the names (TC-AUTH-01)', async () => {
+    const withoutConsent = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({ ...registration, gdprConsent: false })
+      .expect(400);
+    expect(withoutConsent.body.error).toBe('You must accept the privacy policy to create an account.');
+
+    const withoutName = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({ ...registration, firstName: '   ' })
+      .expect(400);
+    expect(withoutName.body.error).toBe('Enter your first name.');
   });
 
   it('GET /api/auth/verify returns 200 and message', async () => {

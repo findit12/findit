@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { User } from '../users/user.entity';
 import { AuthToken, AuthTokenType } from './auth-token.entity';
 import { MailService } from '../mail/mail.service';
+import { CredentialsDto } from './auth.dto';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -73,34 +74,64 @@ describe('AuthService', () => {
     jest.clearAllMocks();
   });
 
-  describe('register', () => {
+    describe('register', () => {
+    // A valid registration form (FR-01); each test changes only what it checks.
+    const form = (changes: Partial<CredentialsDto> = {}): CredentialsDto => ({
+      email: 'user@school.edu',
+      password: 'Password123',
+      firstName: 'Elea',
+      lastName: 'Schom',
+      gdprConsent: true,
+      ...changes,
+    });
+
     it('should throw BadRequestException if email is not from school domain', async () => {
-      await expect(
-        service.register({ email: 'user@other.com', password: 'Password123' }),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.register(form({ email: 'user@other.com' }))).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException if password is weak', async () => {
-      await expect(
-        service.register({ email: 'user@school.edu', password: 'short' }),
-      ).rejects.toThrow(BadRequestException);
+      await expect(service.register(form({ password: 'short' }))).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should refuse an account without the GDPR consent (TC-AUTH-01)', async () => {
+      await expect(service.register(form({ gdprConsent: false }))).rejects.toThrow(
+        'You must accept the privacy policy to create an account.',
+      );
+      expect(usersRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('should refuse an account without a first name or a last name', async () => {
+      await expect(service.register(form({ firstName: '   ' }))).rejects.toThrow(
+        'Enter your first name and last name.',
+      );
+      await expect(service.register(form({ lastName: '' }))).rejects.toThrow(
+        'Enter your first name and last name.',
+      );
+      expect(usersRepo.save).not.toHaveBeenCalled();
     });
 
     it('should throw ConflictException if user already exists', async () => {
       usersRepo.findOneBy.mockResolvedValue({ id: 1, email: 'user@school.edu' });
 
-      await expect(
-        service.register({ email: 'user@school.edu', password: 'Password123' }),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.register(form())).rejects.toThrow(ConflictException);
     });
 
     it('should register user and send verification email in background without blocking', async () => {
       usersRepo.findOneBy.mockResolvedValue(null);
 
-      const result = await service.register({
-        email: 'User@School.EDU ',
-        password: 'Password123',
-      });
+      const result = await service.register(
+        form({ email: 'User@School.EDU ', firstName: ' Elea ', lastName: 'Schom ' }),
+      );
+
+      // FR-01: the names are saved without extra spaces, and the consent date is recorded.
+      const saved = usersRepo.save.mock.calls[0][0];
+      expect(saved.firstName).toBe('Elea');
+      expect(saved.lastName).toBe('Schom');
+      expect(saved.consentAt).toBeInstanceOf(Date);
 
       expect(usersRepo.save).toHaveBeenCalled();
       expect(tokensRepo.delete).toHaveBeenCalledWith({
