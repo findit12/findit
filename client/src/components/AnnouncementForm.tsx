@@ -1,7 +1,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { Announcement, AnnouncementFormValues, AnnouncementType, ReferenceData } from '../types/announcement';
-
-const MAX_PHOTOS = 4;
+import { ACCEPTED_TYPES, MAX_PHOTOS, photoError } from '../utils/photoRules';
 
 // Today's date as "YYYY-MM-DD", used as the latest date that can be chosen.
 function today(): string {
@@ -88,10 +87,25 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
     }));
   }
 
+  // SCRUM-19: keeps the valid photos and explains why the others are refused.
   function addPhotos(event: ChangeEvent<HTMLInputElement>) {
     const chosen = Array.from(event.target.files ?? []);
     event.target.value = ''; // allows choosing the same file again after removing it
-    setPhotos((current) => [...current, ...chosen].slice(0, MAX_PHOTOS));
+
+    const problems: string[] = [];
+    const valid = chosen.filter((file) => {
+      const problem = photoError(file);
+      if (problem) problems.push(problem);
+      return problem === null;
+    });
+
+    const room = MAX_PHOTOS - photos.length;
+    if (valid.length > room) {
+      problems.push(`You can add up to ${MAX_PHOTOS} photos.`);
+    }
+
+    setPhotos([...photos, ...valid.slice(0, room)]);
+    setError(problems.join(' '));
   }
 
   function removePhoto(index: number) {
@@ -257,6 +271,7 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
         <div className="photos-field">
           <span className="field-title">
             Photos {isFound ? '(1 to 4)' : <span className="optional">(optional, up to 4)</span>}
+            <span className="optional"> · JPEG, PNG or WebP, 5 MB max each</span>
           </span>
           {previews.length > 0 && (
             <ul className="photo-previews">
@@ -271,7 +286,7 @@ export default function AnnouncementForm(props: AnnouncementFormProps) {
             </ul>
           )}
           {photos.length < MAX_PHOTOS && (
-            <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={addPhotos} />
+            <input type="file" accept={ACCEPTED_TYPES.join(',')} multiple onChange={addPhotos} />
           )}
         </div>
       )}
