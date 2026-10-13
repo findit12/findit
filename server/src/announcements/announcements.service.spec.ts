@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { In, MoreThanOrEqual } from 'typeorm';
+import { ILike, In, MoreThanOrEqual } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -282,6 +282,39 @@ describe('AnnouncementsService', () => {
       const where = announcements.findAndCount.mock.calls[0][0].where;
       expect(where).not.toHaveProperty('categoryId');
       expect(where).not.toHaveProperty('eventDate');
+    });
+
+    it('searches the keyword in the title, description, brand and color (SCRUM-24)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ q: '  phone  ', placeId: 3 });
+
+      const where = announcements.findAndCount.mock.calls[0][0].where;
+      expect(where).toHaveLength(4);
+      expect(where[0].title).toEqual(ILike('%phone%'));
+      expect(where[1].description).toEqual(ILike('%phone%'));
+      expect(where[2].brand).toEqual(ILike('%phone%'));
+      expect(where[3].color).toEqual(ILike('%phone%'));
+      // every condition keeps the status rule and the other filters
+      where.forEach((condition: Record<string, unknown>) => {
+        expect(condition.placeId).toBe(3);
+        expect(condition.status).toEqual(In([AnnouncementStatus.Available, AnnouncementStatus.Open]));
+      });
+    });
+
+    it('escapes % and _ typed in the keyword', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ q: '50%_' });
+
+      const where = announcements.findAndCount.mock.calls[0][0].where;
+      expect(where[0].title).toEqual(ILike('%50\\%\\_%'));
+    });
+
+    it('ignores an empty keyword', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ q: '   ' });
+
+      const where = announcements.findAndCount.mock.calls[0][0].where;
+      expect(Array.isArray(where)).toBe(false);
     });
 
     it('uses page 1 and 20 per page by default, and always has at least one page', async () => {

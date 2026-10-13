@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -142,8 +142,23 @@ export class AnnouncementsService {
     else if (query.dateFrom) where.eventDate = MoreThanOrEqual(query.dateFrom);
     else if (query.dateTo) where.eventDate = LessThanOrEqual(query.dateTo);
 
+    // SCRUM-24: keyword, case does not matter. A % or _ typed by the user is escaped, so it is
+    // read as an ordinary character. With a keyword, one condition per column (OR between them),
+    // and each condition keeps the status and the filters above (AND).
+    const keyword = (query.q ?? '').trim();
+    let conditions: FindOptionsWhere<Announcement> | FindOptionsWhere<Announcement>[] = where;
+    if (keyword) {
+      const pattern = '%' + keyword.replace(/[\\%_]/g, '\\$&') + '%';
+      conditions = [
+        { ...where, title: ILike(pattern) },
+        { ...where, description: ILike(pattern) },
+        { ...where, brand: ILike(pattern) },
+        { ...where, color: ILike(pattern) },
+      ];
+    }
+
     const [announcements, total] = await this.announcements.findAndCount({
-      where,
+      where: conditions,
       relations: { category: true, objectType: true, place: true },
       order: { createdAt: 'DESC', id: 'DESC' },
       skip: (page - 1) * limit,

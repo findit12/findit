@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Matches, Max, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
@@ -55,4 +55,11 @@ export class ListAnnouncementsQueryDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The end date must look like 2026-10-31.' })
   dateTo?: string;
+
+  // SCRUM-24: keyword searched in the title, description, brand and color.
+  @ApiPropertyOptional({ example: 'phone', description: 'Keyword searched in the title, description, brand and color' })
+  @IsOptional()
+  @MaxLength(100, { message: 'The keyword cannot be more than 100 characters.' })
+  @IsString({ message: 'The keyword must be text.' })
+  q?: string;
 }
