@@ -142,7 +142,7 @@ export default function GalleryPage() {
           type="search"
           value={searchText}
           maxLength={100}
-          placeholder="Search by keyword (title, description, brand, color)"
+          placeholder="Search by keyword (title or description)"
           aria-label="Search by keyword"
           onChange={(event) => setSearchText(event.target.value)}
         />

@@ -152,8 +152,6 @@ export class AnnouncementsService {
       conditions = [
         { ...where, title: ILike(pattern) },
         { ...where, description: ILike(pattern) },
-        { ...where, brand: ILike(pattern) },
-        { ...where, color: ILike(pattern) },
       ];
     }
 

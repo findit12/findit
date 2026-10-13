@@ -284,16 +284,19 @@ describe('AnnouncementsService', () => {
       expect(where).not.toHaveProperty('eventDate');
     });
 
-    it('searches the keyword in the title, description, brand and color (SCRUM-24)', async () => {
+    it('searches the keyword in the title and description only (SCRUM-24)', async () => {
       announcements.findAndCount.mockResolvedValue([[], 0]);
       await service.findPublicPage({ q: '  phone  ', placeId: 3 });
 
       const where = announcements.findAndCount.mock.calls[0][0].where;
-      expect(where).toHaveLength(4);
+      expect(where).toHaveLength(2);
       expect(where[0].title).toEqual(ILike('%phone%'));
       expect(where[1].description).toEqual(ILike('%phone%'));
-      expect(where[2].brand).toEqual(ILike('%phone%'));
-      expect(where[3].color).toEqual(ILike('%phone%'));
+      where.forEach((condition: Record<string, unknown>) => {
+        expect(condition).not.toHaveProperty('brand');
+        expect(condition).not.toHaveProperty('color');
+        expect(condition).not.toHaveProperty('hiddenDetail');
+      });
       // every condition keeps the status rule and the other filters
       where.forEach((condition: Record<string, unknown>) => {
         expect(condition.placeId).toBe(3);

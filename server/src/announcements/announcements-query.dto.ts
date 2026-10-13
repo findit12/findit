@@ -56,8 +56,8 @@ export class ListAnnouncementsQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The end date must look like 2026-10-31.' })
   dateTo?: string;
 
-  // SCRUM-24: keyword searched in the title, description, brand and color.
-  @ApiPropertyOptional({ example: 'phone', description: 'Keyword searched in the title, description, brand and color' })
+  // SCRUM-24: keyword searched in the title and description only (never in the hidden detail).
+  @ApiPropertyOptional({ example: 'phone', description: 'Keyword searched in the title and description' })
   @IsOptional()
   @MaxLength(100, { message: 'The keyword cannot be more than 100 characters.' })
   @IsString({ message: 'The keyword must be text.' })
