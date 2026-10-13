@@ -320,6 +320,33 @@ describe('AnnouncementsService', () => {
       expect(Array.isArray(where)).toBe(false);
     });
 
+    it('sorts the oldest first when asked (SCRUM-25)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ sort: 'oldest' });
+
+      expect(announcements.findAndCount.mock.calls[0][0].order).toEqual({ createdAt: 'ASC', id: 'ASC' });
+    });
+
+    it('sorts by event date, the most recent event first (SCRUM-25)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ sort: 'eventDate' });
+
+      expect(announcements.findAndCount.mock.calls[0][0].order).toEqual({
+        eventDate: 'DESC',
+        createdAt: 'DESC',
+        id: 'DESC',
+      });
+    });
+
+    it('sorts the newest first when the sort is missing or newest (SCRUM-25)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({});
+      await service.findPublicPage({ sort: 'newest' });
+
+      expect(announcements.findAndCount.mock.calls[0][0].order).toEqual({ createdAt: 'DESC', id: 'DESC' });
+      expect(announcements.findAndCount.mock.calls[1][0].order).toEqual({ createdAt: 'DESC', id: 'DESC' });
+    });
+
     it('uses page 1 and 20 per page by default, and always has at least one page', async () => {
       announcements.findAndCount.mockResolvedValue([[], 0]);
       const result = await service.findPublicPage({});
