@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -24,6 +25,7 @@ import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
+import { ListAnnouncementsQueryDto } from './announcements-query.dto';
 
 // Multer accepts more than the rules allow, so that checkPhotos() can answer with a clear
 // message ("You can add up to 4 photos.", "... is too large") instead of a generic error.
@@ -49,6 +51,15 @@ export class AnnouncementsController {
     @UploadedFiles() files: Express.Multer.File[] = [],
   ) {
     return this.service.create(userId, dto, files);
+  }
+
+  // SCRUM-22: public gallery, one page at a time (?page=1&limit=20).
+  @Get()
+  @ApiOperation({ summary: 'Browse the public announcements, newest first (Available found and Open lost only)' })
+  @ApiResponse({ status: 200, description: 'A page of announcements and the pagination data' })
+  @ApiResponse({ status: 400, description: 'Invalid page or limit' })
+  findAll(@Query() query: ListAnnouncementsQueryDto) {
+    return this.service.findPublicPage(query);
   }
 
   // The "mine" routes are written before ":id", otherwise "mine" would be read as an id.

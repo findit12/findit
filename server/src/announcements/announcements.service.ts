@@ -7,12 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
 import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
+import { DEFAULT_PAGE_SIZE, ListAnnouncementsQueryDto } from './announcements-query.dto';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { checkPhotos } from './photo-rules';
 import { PhotoStorageService } from './photo-storage.service';
@@ -22,6 +23,10 @@ const DAYS_BEFORE_ARCHIVE = 90;
 // The author can only change an announcement that is still active (SDD: Returned, Closed,
 // Deleted and Archived are final; Hidden is decided by an administrator).
 const EDITABLE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
+
+// SCRUM-22: only these statuses appear in the public gallery. Closed, Returned, Deleted, Hidden
+// and Archived never do.
+const GALLERY_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
 
 // Turns an empty optional field ("") into null, so the database stores "no value".
 function emptyToNull(value?: string): string | null {
@@ -121,6 +126,24 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
     return { announcement: toPublicView(announcement) };
+  }
+
+  // SCRUM-22: one page of the public gallery, newest first. toPublicView never includes the
+  // hidden detail. Number() makes sure we have numbers even if the query arrives as text.
+  async findPublicPage(query: ListAnnouncementsQueryDto) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
+    const [announcements, total] = await this.announcements.findAndCount({
+      where: { status: In(GALLERY_STATUSES) },
+      relations: { category: true, objectType: true, place: true },
+      order: { createdAt: 'DESC', id: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return {
+      announcements: announcements.map(toPublicView),
+      meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
   // SCRUM-18: the announcements of the signed-in user, newest first, with their hidden detail.
