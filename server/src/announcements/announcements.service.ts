@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -133,8 +133,17 @@ export class AnnouncementsService {
   async findPublicPage(query: ListAnnouncementsQueryDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
+    // SCRUM-23: each filter that is sent adds one condition; all of them must be true.
+    const where: FindOptionsWhere<Announcement> = { status: In(GALLERY_STATUSES) };
+    if (query.categoryId) where.categoryId = query.categoryId;
+    if (query.objectTypeId) where.objectTypeId = query.objectTypeId;
+    if (query.placeId) where.placeId = query.placeId;
+    if (query.dateFrom && query.dateTo) where.eventDate = Between(query.dateFrom, query.dateTo);
+    else if (query.dateFrom) where.eventDate = MoreThanOrEqual(query.dateFrom);
+    else if (query.dateTo) where.eventDate = LessThanOrEqual(query.dateTo);
+
     const [announcements, total] = await this.announcements.findAndCount({
-      where: { status: In(GALLERY_STATUSES) },
+      where,
       relations: { category: true, objectType: true, place: true },
       order: { createdAt: 'DESC', id: 'DESC' },
       skip: (page - 1) * limit,

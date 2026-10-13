@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { In } from 'typeorm';
+import { In, MoreThanOrEqual } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -261,6 +261,27 @@ describe('AnnouncementsService', () => {
       expect(options.skip).toBe(40);
       expect(options.take).toBe(20);
       expect(result.meta).toEqual({ page: 3, limit: 20, total: 41, totalPages: 3 });
+    });
+
+    it('adds one condition for each filter that is sent (SCRUM-23)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ categoryId: 1, objectTypeId: 2, placeId: 3, dateFrom: '2026-10-01' });
+
+      const where = announcements.findAndCount.mock.calls[0][0].where;
+      expect(where.categoryId).toBe(1);
+      expect(where.objectTypeId).toBe(2);
+      expect(where.placeId).toBe(3);
+      expect(where.eventDate).toEqual(MoreThanOrEqual('2026-10-01'));
+      expect(where.status).toEqual(In([AnnouncementStatus.Available, AnnouncementStatus.Open]));
+    });
+
+    it('does not filter on anything that is not sent', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ placeId: 3 });
+
+      const where = announcements.findAndCount.mock.calls[0][0].where;
+      expect(where).not.toHaveProperty('categoryId');
+      expect(where).not.toHaveProperty('eventDate');
     });
 
     it('uses page 1 and 20 per page by default, and always has at least one page', async () => {
