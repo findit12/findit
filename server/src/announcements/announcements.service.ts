@@ -141,6 +141,8 @@ export class AnnouncementsService {
   async findPublicPage(query: ListAnnouncementsQueryDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
+    // SCRUM-23: an unknown id, or an object that does not belong to the category, answers 400.
+    await this.reference.checkFilters(query.categoryId, query.objectTypeId, query.placeId);
     // SCRUM-23: each filter that is sent adds one condition; all of them must be true.
     const where: FindOptionsWhere<Announcement> = { status: In(GALLERY_STATUSES) };
     if (query.categoryId) where.categoryId = query.categoryId;

@@ -68,4 +68,21 @@ export class ReferenceService implements OnApplicationBootstrap {
       throw new BadRequestException('Choose a place from the list.');
     }
   }
+
+  // SCRUM-23: checks the filters of the gallery. Unlike checkSelection, every id is optional:
+  // only the ids that are sent are checked.
+  async checkFilters(categoryId?: number, objectTypeId?: number, placeId?: number): Promise<void> {
+    if (objectTypeId) {
+      const objectType = await this.objectTypes.findOneBy({ id: objectTypeId });
+      if (!objectType || (categoryId && objectType.categoryId !== categoryId)) {
+        throw new BadRequestException('Choose a precise object that belongs to the selected category.');
+      }
+    }
+    if (categoryId && !(await this.categories.findOneBy({ id: categoryId }))) {
+      throw new BadRequestException('Choose a category from the list.');
+    }
+    if (placeId && !(await this.places.findOneBy({ id: placeId, isActive: true }))) {
+      throw new BadRequestException('Choose a place from the list.');
+    }
+  }
 }

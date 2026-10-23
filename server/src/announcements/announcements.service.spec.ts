@@ -96,7 +96,7 @@ describe('AnnouncementsService', () => {
     findOneOrFail: jest.Mock;
   };
   let users: { findOneBy: jest.Mock };
-  let reference: { checkSelection: jest.Mock };
+  let reference: { checkSelection: jest.Mock; checkFilters: jest.Mock };
   let photoStorage: { save: jest.Mock };
   let mail: { confirmation: jest.Mock };
 
@@ -110,7 +110,10 @@ describe('AnnouncementsService', () => {
       findOneOrFail: jest.fn().mockResolvedValue(storedAnnouncement()),
     };
     users = { findOneBy: jest.fn().mockResolvedValue({ id: 1, email: 'elea@school.test' }) };
-    reference = { checkSelection: jest.fn().mockResolvedValue(undefined) };
+    reference = {
+      checkSelection: jest.fn().mockResolvedValue(undefined),
+      checkFilters: jest.fn().mockResolvedValue(undefined),
+    };
     photoStorage = { save: jest.fn().mockResolvedValue(['a.jpg']) };
     mail = { confirmation: jest.fn().mockResolvedValue(undefined) };
 
@@ -345,6 +348,23 @@ describe('AnnouncementsService', () => {
 
       expect(announcements.findAndCount.mock.calls[0][0].order).toEqual({ createdAt: 'DESC', id: 'DESC' });
       expect(announcements.findAndCount.mock.calls[1][0].order).toEqual({ createdAt: 'DESC', id: 'DESC' });
+    });
+
+    it('checks the filters that are sent with the reference lists (SCRUM-23)', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({ categoryId: 1, objectTypeId: 2, placeId: 3 });
+
+      expect(reference.checkFilters).toHaveBeenCalledWith(1, 2, 3);
+    });
+
+    it('refuses an object that does not belong to the category, before searching (SCRUM-23)', async () => {
+      reference.checkFilters.mockRejectedValue(
+        new BadRequestException('Choose a precise object that belongs to the selected category.'),
+      );
+      await expect(service.findPublicPage({ categoryId: 1, objectTypeId: 13 })).rejects.toThrow(
+        'Choose a precise object that belongs to the selected category.',
+      );
+      expect(announcements.findAndCount).not.toHaveBeenCalled();
     });
 
     it('uses page 1 and 20 per page by default, and always has at least one page', async () => {
