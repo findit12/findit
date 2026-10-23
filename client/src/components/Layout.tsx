@@ -27,6 +27,9 @@ export default function Layout() {
             <Link className="link-button" to="/my-announcements">
               My announcements
             </Link>
+            <Link className="link-button" to="/saved-searches">
+              Saved searches
+            </Link>
             <button className="link-button" onClick={logout}>
               Sign out
             </button>

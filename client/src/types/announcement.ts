@@ -84,3 +84,16 @@ export interface AnnouncementPage {
   announcements: Announcement[];
   meta: PageMeta;
 }
+
+// SCRUM-27: a search saved by the signed-in user (answer of GET /api/saved-searches).
+// A criterion that is null means "no filter on this".
+export interface SavedSearch {
+  id: number;
+  categoryId: number | null;
+  objectTypeId: number | null;
+  placeId: number | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  q: string | null;
+  createdAt: string;
+}

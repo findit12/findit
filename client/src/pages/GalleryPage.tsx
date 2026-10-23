@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
 import type { ApiError } from '../api';
 import type { Announcement, AnnouncementPage, ReferenceData } from '../types/announcement';
+import { useAuth } from '../auth/AuthContext';
 
 const PAGE_SIZE = 20;
 
@@ -62,6 +63,12 @@ export default function GalleryPage() {
     sort: searchParams.get('sort') ?? '',
   };
   const hasFilters = FILTER_KEYS.some((key) => filters[key] !== '');
+  // SCRUM-27: only signed-in users can save a search. The sort and the page are not saved.
+  const { token } = useAuth();
+  const [saveNotice, setSaveNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const canSave = Boolean(
+    filters.categoryId || filters.objectTypeId || filters.placeId || filters.dateFrom || filters.dateTo || filters.q,
+  );
   const [reference, setReference] = useState<ReferenceData | null>(null);
   // SCRUM-24: what is typed in the search box. The search starts when the form is sent.
   const [searchText, setSearchText] = useState(filters.q);
@@ -108,6 +115,23 @@ export default function GalleryPage() {
     };
   }, [queryString]);
 
+  // SCRUM-27: sends the current filters and keyword to the server.
+  async function saveSearch() {
+    const body: Record<string, string | number> = {};
+    if (filters.categoryId) body.categoryId = Number(filters.categoryId);
+    if (filters.objectTypeId) body.objectTypeId = Number(filters.objectTypeId);
+    if (filters.placeId) body.placeId = Number(filters.placeId);
+    if (filters.dateFrom) body.dateFrom = filters.dateFrom;
+    if (filters.dateTo) body.dateTo = filters.dateTo;
+    if (filters.q) body.q = filters.q;
+    try {
+      await apiRequest('/saved-searches', { method: 'POST', token, body });
+      setSaveNotice({ text: 'Search saved. You will get an email when a new announcement matches.', error: false });
+    } catch (err) {
+      setSaveNotice({ text: (err as Error).message, error: true });
+    }
+  }
+
   function goToPage(next: number) {
     const params = new URLSearchParams(searchParams);
     params.set('page', String(next));
@@ -122,6 +146,7 @@ export default function GalleryPage() {
     else params.delete(key);
     if (key === 'categoryId') params.delete('objectTypeId');
     params.delete('page');
+    setSaveNotice(null);
     setSearchParams(params);
   }
 
@@ -209,6 +234,24 @@ export default function GalleryPage() {
           </button>
         )}
       </form>
+      {token && (
+        <div className="gallery-save">
+          <button type="button" className="secondary" disabled={!canSave} onClick={saveSearch}>
+            Save this search
+          </button>
+          {!canSave && <small>Choose a filter or a keyword to save a search.</small>}
+          {saveNotice && (
+            <span className={'notice ' + (saveNotice.error ? 'error' : 'success')} role="status">
+              {saveNotice.text}
+            </span>
+          )}
+          {saveNotice && !saveNotice.error && (
+            <Link className="link-button" to="/saved-searches">
+              My saved searches
+            </Link>
+          )}
+        </div>
+      )}
       {error && (
         <p className="notice error" role="status">
           {error}
