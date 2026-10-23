@@ -19,6 +19,7 @@ import {
 import { CreateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
+import { SavedSearchesService } from '../saved-searches/saved-searches.service';
 
 // A fake uploaded photo, as Multer gives it to the controller.
 function photo(): Express.Multer.File {
@@ -99,6 +100,7 @@ describe('AnnouncementsService', () => {
   let reference: { checkSelection: jest.Mock; checkFilters: jest.Mock };
   let photoStorage: { save: jest.Mock };
   let mail: { confirmation: jest.Mock };
+  let savedSearches: { notifyMatches: jest.Mock };
 
   beforeEach(async () => {
     announcements = {
@@ -116,6 +118,7 @@ describe('AnnouncementsService', () => {
     };
     photoStorage = { save: jest.fn().mockResolvedValue(['a.jpg']) };
     mail = { confirmation: jest.fn().mockResolvedValue(undefined) };
+    savedSearches = { notifyMatches: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -125,6 +128,7 @@ describe('AnnouncementsService', () => {
         { provide: ReferenceService, useValue: reference },
         { provide: PhotoStorageService, useValue: photoStorage },
         { provide: MailService, useValue: mail },
+        { provide: SavedSearchesService, useValue: savedSearches },
       ],
     }).compile();
 
@@ -211,6 +215,22 @@ describe('AnnouncementsService', () => {
         title: 'Blue scarf',
         type: AnnouncementType.Lost,
       });
+    });
+
+    it('asks the saved searches to alert their owners about the new announcement (SCRUM-27)', async () => {
+      await service.create(1, foundForm(), [photo()]);
+
+      expect(savedSearches.notifyMatches).toHaveBeenCalledTimes(1);
+      expect(savedSearches.notifyMatches.mock.calls[0][0]).toMatchObject({
+        id: 7,
+        authorId: 1,
+        title: 'Black phone',
+      });
+    });
+
+    it('still succeeds when the saved search alerts fail (SCRUM-27)', async () => {
+      savedSearches.notifyMatches.mockRejectedValue(new Error('boom'));
+      await expect(service.create(1, foundForm(), [photo()])).resolves.toBeDefined();
     });
 
     it('still succeeds when the confirmation email fails', async () => {
