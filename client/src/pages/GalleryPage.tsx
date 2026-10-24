@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
 import type { ApiError } from '../api';
-import type { Announcement, AnnouncementPage } from '../types/announcement';
+import type { Announcement, AnnouncementPage, ReferenceData } from '../types/announcement';
 
 const PAGE_SIZE = 20;
+
+// SCRUM-23: the filters kept in the address (?categoryId=1&placeId=3...).
+const FILTER_KEYS = ['categoryId', 'objectTypeId', 'placeId', 'dateFrom', 'dateTo'] as const;
+type FilterKey = (typeof FILTER_KEYS)[number];
 
 // Reads the page number from the address (?page=2). Anything invalid becomes page 1.
 function readPage(value: string | null): number {
@@ -48,6 +52,29 @@ function AnnouncementCard({ announcement }: { announcement: Announcement }) {
 export default function GalleryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = readPage(searchParams.get('page'));
+  const filters: Record<FilterKey, string> = {
+    categoryId: searchParams.get('categoryId') ?? '',
+    objectTypeId: searchParams.get('objectTypeId') ?? '',
+    placeId: searchParams.get('placeId') ?? '',
+    dateFrom: searchParams.get('dateFrom') ?? '',
+    dateTo: searchParams.get('dateTo') ?? '',
+  };
+  const hasFilters = FILTER_KEYS.some((key) => filters[key] !== '');
+  const [reference, setReference] = useState<ReferenceData | null>(null);
+
+  // The address sent to the API: the page, the size and every filter that is filled in.
+  const apiQuery = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+  FILTER_KEYS.forEach((key) => {
+    if (filters[key]) apiQuery.set(key, filters[key]);
+  });
+  const queryString = apiQuery.toString();
+
+  // The lists of the filters (categories, objects, places) are loaded once.
+  useEffect(() => {
+    apiRequest<ReferenceData>('/reference-data')
+      .then(setReference)
+      .catch(() => setReference(null));
+  }, []);
   const [data, setData] = useState<AnnouncementPage | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,7 +82,7 @@ export default function GalleryPage() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiRequest<AnnouncementPage>(`/announcements?page=${page}&limit=${PAGE_SIZE}`)
+    apiRequest<AnnouncementPage>('/announcements?' + queryString)
       .then((result) => {
         if (!cancelled) {
           setData(result);
@@ -71,19 +98,84 @@ export default function GalleryPage() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
+  }, [queryString]);
 
   function goToPage(next: number) {
-    setSearchParams({ page: String(next) });
+    const params = new URLSearchParams(searchParams);
+    params.set('page', String(next));
+    setSearchParams(params);
     window.scrollTo({ top: 0 });
   }
 
+  // Changing a filter goes back to page 1. A new category empties the object filter.
+  function changeFilter(key: FilterKey, value: string) {
+    const params = new URLSearchParams(searchParams);
+    if (value) params.set(key, value);
+    else params.delete(key);
+    if (key === 'categoryId') params.delete('objectTypeId');
+    params.delete('page');
+    setSearchParams(params);
+  }
+
+  const objectTypes = reference?.categories.find((c) => String(c.id) === filters.categoryId)?.objectTypes ?? [];
   const meta = data?.meta;
   const items = data?.announcements ?? [];
 
   return (
     <section className="gallery">
       <h1>Lost and found objects</h1>
+      <form className="gallery-filters" onSubmit={(event) => event.preventDefault()}>
+        <label>
+          Category
+          <select value={filters.categoryId} onChange={(event) => changeFilter('categoryId', event.target.value)}>
+            <option value="">All categories</option>
+            {reference?.categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Object
+          <select
+            value={filters.objectTypeId}
+            disabled={!filters.categoryId}
+            onChange={(event) => changeFilter('objectTypeId', event.target.value)}
+          >
+            <option value="">All objects</option>
+            {objectTypes.map((objectType) => (
+              <option key={objectType.id} value={objectType.id}>
+                {objectType.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Place
+          <select value={filters.placeId} onChange={(event) => changeFilter('placeId', event.target.value)}>
+            <option value="">All places</option>
+            {reference?.places.map((place) => (
+              <option key={place.id} value={place.id}>
+                {place.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          From
+          <input type="date" value={filters.dateFrom} onChange={(event) => changeFilter('dateFrom', event.target.value)} />
+        </label>
+        <label>
+          To
+          <input type="date" value={filters.dateTo} onChange={(event) => changeFilter('dateTo', event.target.value)} />
+        </label>
+        {hasFilters && (
+          <button type="button" className="secondary" onClick={() => setSearchParams({})}>
+            Clear filters
+          </button>
+        )}
+      </form>
       {error && (
         <p className="notice error" role="status">
           {error}
