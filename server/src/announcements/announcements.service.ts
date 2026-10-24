@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import { Between, FindOptionsOrder, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -27,6 +27,14 @@ const EDITABLE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open
 // SCRUM-22: only these statuses appear in the public gallery. Closed, Returned, Deleted, Hidden
 // and Archived never do.
 const GALLERY_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
+
+// SCRUM-25: the sort orders of the gallery. The id breaks ties, so a page never shows the same
+// announcement twice.
+const GALLERY_ORDERS: Record<'newest' | 'oldest' | 'eventDate', FindOptionsOrder<Announcement>> = {
+  newest: { createdAt: 'DESC', id: 'DESC' },
+  oldest: { createdAt: 'ASC', id: 'ASC' },
+  eventDate: { eventDate: 'DESC', createdAt: 'DESC', id: 'DESC' },
+};
 
 // Turns an empty optional field ("") into null, so the database stores "no value".
 function emptyToNull(value?: string): string | null {
@@ -133,6 +141,8 @@ export class AnnouncementsService {
   async findPublicPage(query: ListAnnouncementsQueryDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
+    // SCRUM-23: an unknown id, or an object that does not belong to the category, answers 400.
+    await this.reference.checkFilters(query.categoryId, query.objectTypeId, query.placeId);
     // SCRUM-23: each filter that is sent adds one condition; all of them must be true.
     const where: FindOptionsWhere<Announcement> = { status: In(GALLERY_STATUSES) };
     if (query.categoryId) where.categoryId = query.categoryId;
@@ -158,7 +168,7 @@ export class AnnouncementsService {
     const [announcements, total] = await this.announcements.findAndCount({
       where: conditions,
       relations: { category: true, objectType: true, place: true },
-      order: { createdAt: 'DESC', id: 'DESC' },
+      order: GALLERY_ORDERS[query.sort ?? 'newest'],
       skip: (page - 1) * limit,
       take: limit,
     });

@@ -7,7 +7,7 @@ import type { Announcement, AnnouncementPage, ReferenceData } from '../types/ann
 const PAGE_SIZE = 20;
 
 // SCRUM-23: the filters kept in the address (?categoryId=1&placeId=3...).
-const FILTER_KEYS = ['categoryId', 'objectTypeId', 'placeId', 'dateFrom', 'dateTo', 'q'] as const;
+const FILTER_KEYS = ['categoryId', 'objectTypeId', 'placeId', 'dateFrom', 'dateTo', 'q', 'sort'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 // Reads the page number from the address (?page=2). Anything invalid becomes page 1.
@@ -59,6 +59,7 @@ export default function GalleryPage() {
     dateFrom: searchParams.get('dateFrom') ?? '',
     dateTo: searchParams.get('dateTo') ?? '',
     q: searchParams.get('q') ?? '',
+    sort: searchParams.get('sort') ?? '',
   };
   const hasFilters = FILTER_KEYS.some((key) => filters[key] !== '');
   const [reference, setReference] = useState<ReferenceData | null>(null);
@@ -193,6 +194,14 @@ export default function GalleryPage() {
         <label>
           To
           <input type="date" value={filters.dateTo} onChange={(event) => changeFilter('dateTo', event.target.value)} />
+        </label>
+        <label>
+          Sort
+          <select value={filters.sort || 'newest'} onChange={(event) => changeFilter('sort', event.target.value)}>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="eventDate">Event date</option>
+          </select>
         </label>
         {hasFilters && (
           <button type="button" className="secondary" onClick={() => setSearchParams({})}>

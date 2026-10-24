@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
@@ -62,4 +62,10 @@ export class ListAnnouncementsQueryDto {
   @MaxLength(100, { message: 'The keyword cannot be more than 100 characters.' })
   @IsString({ message: 'The keyword must be text.' })
   q?: string;
+
+  // SCRUM-25: newest = publication date (default), oldest, eventDate = date of the event, most recent first.
+  @ApiPropertyOptional({ enum: ['newest', 'oldest', 'eventDate'], default: 'newest' })
+  @IsOptional()
+  @IsIn(['newest', 'oldest', 'eventDate'], { message: 'The sort must be newest, oldest or eventDate.' })
+  sort?: 'newest' | 'oldest' | 'eventDate';
 }
