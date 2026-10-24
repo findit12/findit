@@ -72,3 +72,15 @@ export function isEditable(announcement: Announcement): boolean {
 export function isClosable(announcement: Announcement): boolean {
   return announcement.type === 'lost' && announcement.status === 'Open';
 }
+
+// Answer of GET /api/announcements (SCRUM-22): one page of the public gallery.
+export interface PageMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+export interface AnnouncementPage {
+  announcements: Announcement[];
+  meta: PageMeta;
+}

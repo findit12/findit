@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { In } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -90,6 +91,7 @@ describe('AnnouncementsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     find: jest.Mock;
+    findAndCount: jest.Mock;
     findOne: jest.Mock;
     findOneOrFail: jest.Mock;
   };
@@ -103,6 +105,7 @@ describe('AnnouncementsService', () => {
       create: jest.fn((data) => data),
       save: jest.fn((data) => Promise.resolve({ id: 7, ...data })),
       find: jest.fn(),
+      findAndCount: jest.fn(),
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue(storedAnnouncement()),
     };
@@ -227,6 +230,47 @@ describe('AnnouncementsService', () => {
 
       announcements.findOne.mockResolvedValue(storedAnnouncement({ status: AnnouncementStatus.Deleted }));
       await expect(service.findPublic(7)).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findPublicPage (SCRUM-22)', () => {
+    it('returns the public view of the announcements, never the hidden detail', async () => {
+      announcements.findAndCount.mockResolvedValue([[storedAnnouncement()], 1]);
+      const result = await service.findPublicPage({});
+
+      expect(result.announcements).toHaveLength(1);
+      expect(result.announcements[0]).not.toHaveProperty('hiddenDetail');
+      expect(result.announcements[0].photos).toEqual(['/uploads/a.jpg']);
+      expect(result.meta).toEqual({ page: 1, limit: 20, total: 1, totalPages: 1 });
+    });
+
+    it('only asks for Available and Open announcements, newest first', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      await service.findPublicPage({});
+
+      const options = announcements.findAndCount.mock.calls[0][0];
+      expect(options.where.status).toEqual(In([AnnouncementStatus.Available, AnnouncementStatus.Open]));
+      expect(options.order).toEqual({ createdAt: 'DESC', id: 'DESC' });
+    });
+
+    it('skips the previous pages and counts the total number of pages', async () => {
+      announcements.findAndCount.mockResolvedValue([[storedAnnouncement()], 41]);
+      const result = await service.findPublicPage({ page: 3, limit: 20 });
+
+      const options = announcements.findAndCount.mock.calls[0][0];
+      expect(options.skip).toBe(40);
+      expect(options.take).toBe(20);
+      expect(result.meta).toEqual({ page: 3, limit: 20, total: 41, totalPages: 3 });
+    });
+
+    it('uses page 1 and 20 per page by default, and always has at least one page', async () => {
+      announcements.findAndCount.mockResolvedValue([[], 0]);
+      const result = await service.findPublicPage({});
+
+      const options = announcements.findAndCount.mock.calls[0][0];
+      expect(options.skip).toBe(0);
+      expect(options.take).toBe(20);
+      expect(result.meta.totalPages).toBe(1);
     });
   });
 

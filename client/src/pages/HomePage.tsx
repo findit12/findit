@@ -13,6 +13,9 @@ export default function HomePage() {
         <Link className="secondary button-link" to="/announcements/new?type=lost">
           I lost an object
         </Link>
+        <Link className="secondary button-link" to="/gallery">
+          Browse announcements
+        </Link>
         <Link className="link-button" to="/my-announcements">
           See my announcements
         </Link>

@@ -3,6 +3,7 @@ import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
 import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
+import GalleryPage from './pages/GalleryPage';
 import NewAnnouncementPage from './pages/NewAnnouncementPage';
 import AnnouncementDetailPage from './pages/AnnouncementDetailPage';
 import EditAnnouncementPage from './pages/EditAnnouncementPage';
@@ -32,6 +33,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+        <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/announcements/:id" element={<AnnouncementDetailPage />} />
         <Route
           path="/announcements/:id/edit"
