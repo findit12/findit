@@ -109,6 +109,15 @@ export class AnnouncementsController {
     return this.service.remove(userId, id);
   }
 
+  
+  @Get(':id/matches')
+  @ApiOperation({ summary: 'Get public matching announcements for an announcement' })
+  @ApiResponse({ status: 200, description: 'Matching public announcements, ordered by score' })
+  @ApiResponse({ status: 404, description: 'Announcement not found' })
+  findPublicMatches(@Param('id', ParseIntPipe) id: number) {
+    return this.service.findPublicMatches(id);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Read an announcement (the hidden detail is never included)' })
   @ApiResponse({ status: 200, description: 'Announcement details' })
