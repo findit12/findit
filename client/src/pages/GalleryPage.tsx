@@ -7,7 +7,7 @@ import type { Announcement, AnnouncementPage, ReferenceData } from '../types/ann
 const PAGE_SIZE = 20;
 
 // SCRUM-23: the filters kept in the address (?categoryId=1&placeId=3...).
-const FILTER_KEYS = ['categoryId', 'objectTypeId', 'placeId', 'dateFrom', 'dateTo'] as const;
+const FILTER_KEYS = ['categoryId', 'objectTypeId', 'placeId', 'dateFrom', 'dateTo', 'q'] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
 // Reads the page number from the address (?page=2). Anything invalid becomes page 1.
@@ -58,9 +58,16 @@ export default function GalleryPage() {
     placeId: searchParams.get('placeId') ?? '',
     dateFrom: searchParams.get('dateFrom') ?? '',
     dateTo: searchParams.get('dateTo') ?? '',
+    q: searchParams.get('q') ?? '',
   };
   const hasFilters = FILTER_KEYS.some((key) => filters[key] !== '');
   const [reference, setReference] = useState<ReferenceData | null>(null);
+  // SCRUM-24: what is typed in the search box. The search starts when the form is sent.
+  const [searchText, setSearchText] = useState(filters.q);
+  // "Clear filters" or the Back button change the address: the box follows.
+  useEffect(() => {
+    setSearchText(filters.q);
+  }, [filters.q]);
 
   // The address sent to the API: the page, the size and every filter that is filled in.
   const apiQuery = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
@@ -124,6 +131,23 @@ export default function GalleryPage() {
   return (
     <section className="gallery">
       <h1>Lost and found objects</h1>
+      <form
+        className="gallery-search"
+        onSubmit={(event) => {
+          event.preventDefault();
+          changeFilter('q', searchText.trim());
+        }}
+      >
+        <input
+          type="search"
+          value={searchText}
+          maxLength={100}
+          placeholder="Search by keyword (title or description)"
+          aria-label="Search by keyword"
+          onChange={(event) => setSearchText(event.target.value)}
+        />
+        <button type="submit">Search</button>
+      </form>
       <form className="gallery-filters" onSubmit={(event) => event.preventDefault()}>
         <label>
           Category

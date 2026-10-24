@@ -567,3 +567,7 @@ main:has(.gallery) {
 .gallery-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; margin: 16px 0; }
 .gallery-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; font-weight: 600; }
 .gallery-filters input[type="date"] { border: 1px solid #d7dfd6; border-radius: 8px; padding: 10px 12px; font: inherit; }
+
+/* SCRUM-24: keyword search of the public gallery */
+.gallery-search { display: flex; gap: 8px; margin: 16px 0 0; }
+.gallery-search input[type="search"] { flex: 1; border: 1px solid #d7dfd6; border-radius: 8px; padding: 10px 12px; font: inherit; }
