@@ -30,6 +30,12 @@ describe('MailService', () => {
     ).resolves.not.toThrow();
   });
 
+  it('should format and trigger saved search alert email without error', async () => {
+    await expect(
+      service.savedSearchAlert('user@school.edu', { id: 44, title: 'Keys', type: 'found' }),
+    ).resolves.not.toThrow();
+  });
+
   it('writes the title (escaped) and the link of the announcement in the confirmation (SCRUM-17)', async () => {
     await service.confirmation('user@school.edu', { id: 43, title: 'Scarf <b>blue</b>', type: 'lost' });
 

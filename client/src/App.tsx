@@ -8,6 +8,7 @@ import NewAnnouncementPage from './pages/NewAnnouncementPage';
 import AnnouncementDetailPage from './pages/AnnouncementDetailPage';
 import EditAnnouncementPage from './pages/EditAnnouncementPage';
 import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
+import MySavedSearchesPage from './pages/MySavedSearchesPage';
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -48,6 +49,14 @@ export default function App() {
           element={
             <RequireAuth>
               <MyAnnouncementsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/saved-searches"
+          element={
+            <RequireAuth>
+              <MySavedSearchesPage />
             </RequireAuth>
           }
         />

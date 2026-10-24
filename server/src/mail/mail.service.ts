@@ -66,4 +66,17 @@ export class MailService {
     const intro = `Your announcement "${announcement.title}" is online. You can see it, edit it or delete it from its page.`;
     await this.send(to, subject, `${base}/announcements/${announcement.id}`, intro);
   }
+
+  // SCRUM-27: sent to the owner of a saved search when a new announcement matches it.
+  async savedSearchAlert(to: string, announcement: ConfirmedAnnouncement): Promise<void> {
+    const base = this.getClientBaseUrl();
+    const kind = announcement.type === 'found' ? 'found object' : 'lost object';
+    const intro = `A new ${kind} matches your saved search: "${announcement.title}".`;
+    await this.send(
+      to,
+      'A new announcement matches your saved search',
+      `${base}/announcements/${announcement.id}`,
+      intro,
+    );
+  }
 }

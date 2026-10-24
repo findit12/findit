@@ -11,6 +11,7 @@ import { Between, FindOptionsOrder, FindOptionsWhere, ILike, In, LessThanOrEqual
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
+import { SavedSearchesService } from '../saved-searches/saved-searches.service';
 import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
 import { DEFAULT_PAGE_SIZE, ListAnnouncementsQueryDto } from './announcements-query.dto';
@@ -59,6 +60,7 @@ export class AnnouncementsService {
     private readonly reference: ReferenceService,
     private readonly photoStorage: PhotoStorageService,
     private readonly mail: MailService,
+    private readonly savedSearches: SavedSearchesService,
   ) {}
 
   // SCRUM-16 and SCRUM-20: saves a found or lost declaration with its photos.
@@ -116,6 +118,12 @@ export class AnnouncementsService {
       .catch((err) => {
         this.logger.error(`Failed to send confirmation email for announcement ${saved.id}`, err);
       });
+
+    // SCRUM-27: alert the owners of the saved searches that match this new announcement.
+    // Like the confirmation email, it runs in the background and never breaks the declaration.
+    void this.savedSearches.notifyMatches(saved).catch((err) => {
+      this.logger.error('Failed to send saved search alerts for announcement ' + saved.id, err);
+    });
 
     return { announcement: toOwnerView(await this.findWithDetails(saved.id)) };
   }
