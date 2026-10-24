@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
-import { useAuth } from '../auth/AuthContext';
-import { Announcement, isClosable, isEditable } from '../types/announcement';
+import {
+  Announcement,
+  AnnouncementMatchesResponse,
+  isClosable,
+  isEditable,
+} from '../types/announcement';import { useAuth } from '../auth/AuthContext';
 
 // Detail page of one announcement: /announcements/:id. The hidden detail is never shown here.
 export default function AnnouncementDetailPage() {
@@ -15,12 +19,21 @@ export default function AnnouncementDetailPage() {
 
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [error, setError] = useState('');
+  const [matches, setMatches] = useState<Announcement[]>([]);
 
-  useEffect(() => {
-    apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
-      .then((data) => setAnnouncement(data.announcement))
-      .catch((err: Error) => setError(err.message));
-  }, [id]);
+  
+useEffect(() => {
+  apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
+    .then((data) => setAnnouncement(data.announcement))
+    .catch((err: Error) => setError(err.message));
+
+  apiRequest<{ matches: { score: number; announcement: Announcement }[] }>(
+    `/announcements/${id}/matches`,
+  )
+    .then((data) => setMatches(data.matches.map((match) => match.announcement))
+    )
+    .catch(() => setMatches([]));
+}, [id]);
 
   async function remove() {
     if (!announcement || !window.confirm(`Delete "${announcement.title}"? It will disappear from FindIt.`)) {

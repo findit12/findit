@@ -97,3 +97,13 @@ export interface SavedSearch {
   q: string | null;
   createdAt: string;
 }
+// SCRUM-29: public matches returned by GET /announcements/:id/matches.
+export interface AnnouncementMatch {
+  score: number;
+  announcement: Announcement;
+}
+
+export interface AnnouncementMatchesResponse {
+  matches: AnnouncementMatch[];
+}
+

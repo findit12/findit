@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { AnnouncementMatch } from './announcement-match.entity';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ILike, In, MoreThanOrEqual } from 'typeorm';
@@ -124,6 +125,15 @@ describe('AnnouncementsService', () => {
       providers: [
         AnnouncementsService,
         { provide: getRepositoryToken(Announcement), useValue: announcements },
+{
+  provide: getRepositoryToken(AnnouncementMatch),
+  useValue: {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn((data) => data),
+    save: jest.fn().mockImplementation(async (data) => data),
+  },
+},
         { provide: getRepositoryToken(User), useValue: users },
         { provide: ReferenceService, useValue: reference },
         { provide: PhotoStorageService, useValue: photoStorage },

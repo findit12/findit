@@ -13,6 +13,7 @@ import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
 import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
+import { AnnouncementMatch } from './announcement-match.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
 import { DEFAULT_PAGE_SIZE, ListAnnouncementsQueryDto } from './announcements-query.dto';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
@@ -56,6 +57,8 @@ export class AnnouncementsService {
 
   constructor(
     @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
+    @InjectRepository(AnnouncementMatch)
+    private readonly announcementMatches: Repository<AnnouncementMatch>,
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly reference: ReferenceService,
     private readonly photoStorage: PhotoStorageService,
@@ -124,12 +127,112 @@ export class AnnouncementsService {
     void this.savedSearches.notifyMatches(saved).catch((err) => {
       this.logger.error('Failed to send saved search alerts for announcement ' + saved.id, err);
     });
+// SCRUM-28: calculate compatible announcements in the background.
+void this.matchAnnouncements(saved).catch((err) => {
+  this.logger.error(
+    `Failed to calculate matches for announcement ${saved.id}`,
+    err instanceof Error ? err.stack : String(err),
+  );
+});
 
     return { announcement: toOwnerView(await this.findWithDetails(saved.id)) };
   }
 
-  // Detail page: anyone can read an announcement, except a deleted or hidden one.
-  async findPublic(id: number) {
+  
+// Detail page: anyone can read an announcement, except a deleted or hidden one.
+// SCRUM-28: find compatible announcements and save their match scores.
+private async matchAnnouncements(source: Announcement): Promise<void> {
+  const oppositeType =
+    source.type === AnnouncementType.Found
+      ? AnnouncementType.Lost
+      : AnnouncementType.Found;
+
+  const candidates = await this.announcements.find({
+    where: {
+      type: oppositeType,
+      status: In(GALLERY_STATUSES),
+    },
+  });
+
+  for (const candidate of candidates) {
+    // Ignore the same announcement and announcements from the same author.
+    if (candidate.id === source.id || candidate.authorId === source.authorId) {
+      continue;
+    }
+
+    const score = this.calculateMatchScore(source, candidate);
+
+    // Only save sufficiently compatible announcements.
+    if (score < 65) {
+      continue;
+    }
+
+    // The database requires announcement_id < matched_announcement_id.
+    const announcementId = Math.min(source.id, candidate.id);
+    const matchedAnnouncementId = Math.max(source.id, candidate.id);
+
+    try {
+      await this.announcementMatches.save(
+        this.announcementMatches.create({
+          announcementId,
+          matchedAnnouncementId,
+          score,
+        }),
+      );
+    } catch (err) {
+      // A duplicate pair may already have been inserted by another background task.
+      this.logger.warn(
+        `Could not save match ${announcementId}/${matchedAnnouncementId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+}
+
+private calculateMatchScore(
+  source: Announcement,
+  candidate: Announcement,
+): number {
+  let score = 0;
+
+  // Category and precise object type.
+  if (source.categoryId === candidate.categoryId) score += 25;
+  if (source.objectTypeId === candidate.objectTypeId) score += 30;
+
+  // Same place.
+  if (source.placeId === candidate.placeId) score += 15;
+
+  // Date proximity.
+  const sourceDate = Date.parse(`${source.eventDate}T00:00:00Z`);
+  const candidateDate = Date.parse(`${candidate.eventDate}T00:00:00Z`);
+  const daysApart = Math.abs(sourceDate - candidateDate) / 86_400_000;
+
+  if (daysApart <= 7) score += 15;
+  else if (daysApart <= 30) score += 10;
+  else if (daysApart <= 90) score += 5;
+
+  // Brand.
+  if (
+    source.brand?.trim() &&
+    candidate.brand?.trim() &&
+    source.brand.trim().toLowerCase() === candidate.brand.trim().toLowerCase()
+  ) {
+    score += 7;
+  }
+
+  // Color.
+  if (
+    source.color?.trim() &&
+    candidate.color?.trim() &&
+    source.color.trim().toLowerCase() === candidate.color.trim().toLowerCase()
+  ) {
+    score += 8;
+  }
+
+  return score;
+}  
+async findPublic(id: number) {
     const announcement = await this.announcements.findOne({
       where: { id },
       relations: { category: true, objectType: true, place: true },
@@ -142,6 +245,50 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
     return { announcement: toPublicView(announcement) };
+  }
+
+  // SCRUM-29: return public matching announcements for a public announcement.
+  async findPublicMatches(id: number) {
+    // Ensure the source announcement is publicly accessible.
+    await this.findPublic(id);
+
+    const matches = await this.announcementMatches.find({
+      where: [
+        { announcementId: id },
+        { matchedAnnouncementId: id },
+      ],
+      relations: {
+        announcement: {
+          category: true,
+          objectType: true,
+          place: true,
+        },
+        matchedAnnouncement: {
+          category: true,
+          objectType: true,
+          place: true,
+        },
+      },
+      order: { score: 'DESC' },
+    });
+
+    const publicMatches = matches
+      .map((match) => {
+        const other =
+          match.announcementId === id
+            ? match.matchedAnnouncement
+            : match.announcement;
+
+        return { score: match.score, other };
+      })
+      .filter(({ other }) => GALLERY_STATUSES.includes(other.status));
+
+    return {
+      matches: publicMatches.map(({ score, other }) => ({
+        score,
+        announcement: toPublicView(other),
+      })),
+    };
   }
 
   // SCRUM-22: one page of the public gallery, newest first. toPublicView never includes the
@@ -200,6 +347,7 @@ export class AnnouncementsService {
   async findMineById(userId: number, id: number) {
     return { announcement: toOwnerView(await this.findOwned(userId, id)) };
   }
+
 
   // SCRUM-18: the author changes some fields of an active announcement.
   // SCRUM-21: the author of a lost announcement can also close it (status: Closed).

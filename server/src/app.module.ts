@@ -6,6 +6,7 @@ import { AnnouncementsModule } from './announcements/announcements.module';
 import { User } from './users/user.entity';
 import { AuthToken } from './auth/auth-token.entity';
 import { Announcement } from './announcements/announcement.entity';
+import { AnnouncementMatch } from './announcements/announcement-match.entity';
 import { Category } from './reference/category.entity';
 import { ObjectType } from './reference/object-type.entity';
 import { Place } from './reference/place.entity';
@@ -21,7 +22,7 @@ import { SavedSearchesModule } from './saved-searches/saved-searches.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [User, AuthToken, Category, ObjectType, Place, Announcement, SavedSearch],
+      entities: [User, AuthToken, Category, ObjectType, Place, Announcement, SavedSearch, AnnouncementMatch],
       synchronize: false,
     }),
     UsersModule,
