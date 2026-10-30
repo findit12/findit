@@ -1,3 +1,4 @@
+
 import {
   Body,
   Controller,
@@ -27,6 +28,7 @@ import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dt
 import { AnnouncementsService } from './announcements.service';
 import { ListAnnouncementsQueryDto } from './announcements-query.dto';
 import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
+import { CreateMessageDto } from '../discussions/create-message.dto';
 
 // Multer accepts more than the rules allow, so that checkPhotos() can answer with a clear
 // message ("You can add up to 4 photos.", "... is too large") instead of a generic error.
@@ -83,6 +85,59 @@ export class AnnouncementsController {
     return this.service.findMineById(userId, id);
   }
 
+  // SCRUM-31: count unread messages for the signed-in user.
+// SCRUM-31: list conversations for the signed-in user.
+@Get('discussions')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@ApiOperation({ summary: 'List my conversations' })
+@ApiResponse({ status: 200, description: 'User conversations' })
+@ApiResponse({ status: 401, description: 'Not signed in' })
+getDiscussions(@CurrentUserId() userId: number) {
+  return this.service.getDiscussions(userId);
+}
+  @Get('discussions/unread-count')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get the number of unread conversation messages' })
+  @ApiResponse({ status: 200, description: 'Unread message count' })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  getUnreadCount(@CurrentUserId() userId: number) {
+    return this.service.getUnreadCount(userId);
+  }
+
+  // SCRUM-31: retrieve messages in a discussion.
+  @Get('discussions/:discussionId/messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get messages in a conversation' })
+  @ApiResponse({ status: 200, description: 'Conversation messages' })
+  @ApiResponse({ status: 403, description: 'Not a discussion participant' })
+  @ApiResponse({ status: 404, description: 'Discussion not found' })
+  getMessages(
+    @CurrentUserId() userId: number,
+    @Param('discussionId', ParseIntPipe) discussionId: number,
+  ) {
+    return this.service.getMessages(discussionId, userId);
+  }
+
+  // SCRUM-31: send a message in a discussion.
+  @Post('discussions/:discussionId/messages')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Send a message in a conversation' })
+  @ApiResponse({ status: 201, description: 'Message sent successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid message content' })
+  @ApiResponse({ status: 403, description: 'Not a discussion participant' })
+  @ApiResponse({ status: 404, description: 'Discussion not found' })
+  sendMessage(
+    @CurrentUserId() userId: number,
+    @Param('discussionId', ParseIntPipe) discussionId: number,
+    @Body() dto: CreateMessageDto,
+  ) {
+    return this.service.sendMessage(discussionId, userId, dto);
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -110,8 +165,7 @@ export class AnnouncementsController {
     return this.service.remove(userId, id);
   }
 
-
-  // Jira task: start a discussion with proof of ownership.
+  // SCRUM-30: start a discussion with proof of ownership.
   @Post(':id/discussions')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -130,7 +184,6 @@ export class AnnouncementsController {
     return this.service.startDiscussion(id, userId, dto);
   }
 
-  
   @Get(':id/matches')
   @ApiOperation({ summary: 'Get public matching announcements for an announcement' })
   @ApiResponse({ status: 200, description: 'Matching public announcements, ordered by score' })

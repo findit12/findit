@@ -1,4 +1,4 @@
-
+﻿
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
@@ -105,7 +105,7 @@ export default function AnnouncementDetailPage() {
     setSubmittingDiscussion(true);
 
     try {
-      await apiRequest(
+      const data = await apiRequest<{ discussionId: number }>(
         `/announcements/${announcement.id}/discussions`,
         {
           method: 'POST',
@@ -114,10 +114,7 @@ export default function AnnouncementDetailPage() {
         },
       );
 
-      setProofDescription('');
-      setDiscussionNotice(
-        'Your discussion has been started. The finder has been notified.',
-      );
+      navigate(`/messages?discussionId=${data.discussionId}`);
     } catch (err) {
       setDiscussionError((err as Error).message);
     } finally {
@@ -134,7 +131,7 @@ export default function AnnouncementDetailPage() {
   }
 
   if (!announcement) {
-    return <section className="card">Loading…</section>;
+    return <section className="card">Loadingâ€¦</section>;
   }
 
   const canStartDiscussion =
@@ -158,7 +155,7 @@ export default function AnnouncementDetailPage() {
       <h1>{announcement.title}</h1>
 
       <p className="intro">
-        {announcement.category.name} · {announcement.objectType.name}
+        {announcement.category.name} Â· {announcement.objectType.name}
       </p>
 
       {announcement.photos.length > 0 && (

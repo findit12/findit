@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+﻿import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
 
@@ -29,6 +29,9 @@ export default function Layout() {
             </Link>
             <Link className="link-button" to="/saved-searches">
               Saved searches
+            </Link>
+            <Link className="link-button" to="/messages">
+              Messages
             </Link>
             <button className="link-button" onClick={logout}>
               Sign out
