@@ -19,6 +19,8 @@ import { DEFAULT_PAGE_SIZE, ListAnnouncementsQueryDto } from './announcements-qu
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { checkPhotos } from './photo-rules';
 import { PhotoStorageService } from './photo-storage.service';
+import { Discussion } from '../discussions/discussion.entity';
+import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
 
 const DAYS_BEFORE_ARCHIVE = 90;
 
@@ -60,6 +62,8 @@ export class AnnouncementsService {
     @InjectRepository(AnnouncementMatch)
     private readonly announcementMatches: Repository<AnnouncementMatch>,
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(Discussion)
+    private readonly discussions: Repository<Discussion>,
     private readonly reference: ReferenceService,
     private readonly photoStorage: PhotoStorageService,
     private readonly mail: MailService,
@@ -231,7 +235,70 @@ private calculateMatchScore(
   }
 
   return score;
-}  
+}
+
+
+  // Jira task: allow an owner to start a discussion with private proof of ownership.
+  async startDiscussion(
+    announcementId: number,
+    userId: number,
+    dto: CreateDiscussionDto,
+  ) {
+    // Load the announcement and its author (the finder).
+    const announcement = await this.announcements.findOne({
+      where: { id: announcementId },
+      relations: { author: true },
+    });
+
+    if (!announcement) {
+      throw new NotFoundException('Announcement not found.');
+    }
+
+    if (announcement.type !== AnnouncementType.Found) {
+      throw new BadRequestException(
+        'You can only start a discussion about a found object.',
+      );
+    }
+
+    if (announcement.status !== AnnouncementStatus.Available) {
+      throw new ConflictException(
+        'This announcement is no longer available.',
+      );
+    }
+
+    if (announcement.authorId === userId) {
+      throw new ForbiddenException(
+        'You cannot start a discussion about your own announcement.',
+      );
+    }
+
+    // Save the claimant's private proof description.
+    const discussion = await this.discussions.save(
+      this.discussions.create({
+        announcementId: announcement.id,
+        ownerId: userId,
+        description: dto.description,
+      }),
+    );
+
+    // Notify the finder without revealing the private proof description.
+    void this.mail
+      .discussionStarted(announcement.author.email, {
+        id: announcement.id,
+        title: announcement.title,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Failed to notify finder for discussion ${discussion.id}`,
+          err,
+        );
+      });
+
+    return {
+      message: 'Discussion started successfully.',
+      discussionId: discussion.id,
+    };
+  }
 async findPublic(id: number) {
     const announcement = await this.announcements.findOne({
       where: { id },
