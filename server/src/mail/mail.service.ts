@@ -1,3 +1,4 @@
+
 import { Injectable, Logger } from '@nestjs/common';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -75,6 +76,23 @@ export class MailService {
     await this.send(
       to,
       'A new announcement matches your saved search',
+      `${base}/announcements/${announcement.id}`,
+      intro,
+    );
+  }
+
+  // Jira task: notify the finder when someone starts a discussion about their found item.
+  async discussionStarted(
+    to: string,
+    announcement: { id: number; title: string },
+  ): Promise<void> {
+    const base = this.getClientBaseUrl();
+
+    const intro = `Someone has started a discussion about your found object "${announcement.title}". Sign in to FindIt to review the claim.`;
+
+    await this.send(
+      to,
+      'Someone wants to claim your found object',
       `${base}/announcements/${announcement.id}`,
       intro,
     );

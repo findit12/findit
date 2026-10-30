@@ -15,6 +15,7 @@ import { MailModule } from './mail/mail.module';
 import { UsersModule } from './users/users.module';
 import { SavedSearch } from './saved-searches/saved-search.entity';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
+import { Discussion } from './discussions/discussion.entity';
 
 @Module({
   imports: [
@@ -22,7 +23,17 @@ import { SavedSearchesModule } from './saved-searches/saved-searches.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [User, AuthToken, Category, ObjectType, Place, Announcement, SavedSearch, AnnouncementMatch],
+      entities: [
+  User,
+  AuthToken,
+  Category,
+  ObjectType,
+  Place,
+  Announcement,
+  SavedSearch,
+  AnnouncementMatch,
+  Discussion,
+],
       synchronize: false,
     }),
     UsersModule,

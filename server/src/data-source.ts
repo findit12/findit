@@ -8,12 +8,23 @@ import { Place } from './reference/place.entity';
 import { Announcement } from './announcements/announcement.entity';
 import { AnnouncementMatch } from './announcements/announcement-match.entity';
 import { SavedSearch } from './saved-searches/saved-search.entity';
+import { Discussion } from './discussions/discussion.entity';
 
 // Used by the migration commands (npm run migration:run, npm run migration:check).
 export default new DataSource({
   type: 'postgres',
   url: process.env.DATABASE_URL,
-  entities: [User, AuthToken, Category, ObjectType, Place, Announcement, SavedSearch, AnnouncementMatch],
+  entities: [
+  User,
+  AuthToken,
+  Category,
+  ObjectType,
+  Place,
+  Announcement,
+  SavedSearch,
+  AnnouncementMatch,
+  Discussion,
+],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
 });

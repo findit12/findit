@@ -10,10 +10,11 @@ import { AnnouncementMatch } from './announcement-match.entity';
 import { AnnouncementsController } from './announcements.controller';
 import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
+import { Discussion } from '../discussions/discussion.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Announcement, AnnouncementMatch, User]),
+    TypeOrmModule.forFeature([Announcement, AnnouncementMatch, User, Discussion]),
     AuthModule, // gives JwtService, used by JwtAuthGuard
     MailModule,
     ReferenceModule, // gives ReferenceService, used to check the ids of the form

@@ -26,6 +26,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 import { ListAnnouncementsQueryDto } from './announcements-query.dto';
+import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
 
 // Multer accepts more than the rules allow, so that checkPhotos() can answer with a clear
 // message ("You can add up to 4 photos.", "... is too large") instead of a generic error.
@@ -107,6 +108,26 @@ export class AnnouncementsController {
   @ApiResponse({ status: 409, description: 'The announcement can no longer be changed' })
   remove(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
     return this.service.remove(userId, id);
+  }
+
+
+  // Jira task: start a discussion with proof of ownership.
+  @Post(':id/discussions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Start a discussion about a found object with proof of ownership' })
+  @ApiResponse({ status: 201, description: 'Discussion started successfully' })
+  @ApiResponse({ status: 400, description: 'Missing or invalid proof description' })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  @ApiResponse({ status: 403, description: 'Cannot claim your own announcement' })
+  @ApiResponse({ status: 404, description: 'Announcement not found' })
+  @ApiResponse({ status: 409, description: 'Announcement is no longer available' })
+  startDiscussion(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateDiscussionDto,
+  ) {
+    return this.service.startDiscussion(id, userId, dto);
   }
 
   
