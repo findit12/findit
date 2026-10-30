@@ -9,6 +9,7 @@ import AnnouncementDetailPage from './pages/AnnouncementDetailPage';
 import EditAnnouncementPage from './pages/EditAnnouncementPage';
 import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 import MySavedSearchesPage from './pages/MySavedSearchesPage';
+import MessagesPage from './pages/MessagesPage';
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/login" element={<AuthPage />} />
         <Route path="/verify" element={<AuthPage />} />
         <Route path="/reset-password" element={<AuthPage />} />
+
         <Route
           path="/"
           element={
@@ -26,6 +28,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="/announcements/new"
           element={
@@ -34,8 +37,10 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/announcements/:id" element={<AnnouncementDetailPage />} />
+
         <Route
           path="/announcements/:id/edit"
           element={
@@ -44,6 +49,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="/my-announcements"
           element={
@@ -52,6 +58,7 @@ export default function App() {
             </RequireAuth>
           }
         />
+
         <Route
           path="/saved-searches"
           element={
@@ -60,6 +67,17 @@ export default function App() {
             </RequireAuth>
           }
         />
+
+        {/* SCRUM-31: Protected messaging page. */}
+        <Route
+          path="/messages"
+          element={
+            <RequireAuth>
+              <MessagesPage />
+            </RequireAuth>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

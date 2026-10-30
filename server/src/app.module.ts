@@ -16,6 +16,7 @@ import { UsersModule } from './users/users.module';
 import { SavedSearch } from './saved-searches/saved-search.entity';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { Discussion } from './discussions/discussion.entity';
+import { Message } from './discussions/message.entity';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { Discussion } from './discussions/discussion.entity';
   AuthToken,
   Category,
   ObjectType,
+  Message,
   Place,
   Announcement,
   SavedSearch,

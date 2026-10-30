@@ -1,3 +1,4 @@
+
 import {
   BadRequestException,
   ConflictException,
@@ -7,45 +8,69 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsOrder, FindOptionsWhere, ILike, In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
+import {
+  Between,
+  FindOptionsOrder,
+  FindOptionsWhere,
+  ILike,
+  In,
+  IsNull,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Not,
+  Repository,
+} from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
-import { Announcement, AnnouncementStatus, AnnouncementType } from './announcement.entity';
+import {
+  Announcement,
+  AnnouncementStatus,
+  AnnouncementType,
+} from './announcement.entity';
 import { AnnouncementMatch } from './announcement-match.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
-import { DEFAULT_PAGE_SIZE, ListAnnouncementsQueryDto } from './announcements-query.dto';
-import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
+import {
+  DEFAULT_PAGE_SIZE,
+  ListAnnouncementsQueryDto,
+} from './announcements-query.dto';
+import {
+  CreateAnnouncementDto,
+  UpdateAnnouncementDto,
+} from './announcements.dto';
 import { checkPhotos } from './photo-rules';
 import { PhotoStorageService } from './photo-storage.service';
 import { Discussion } from '../discussions/discussion.entity';
+import { Message } from '../discussions/message.entity';
 import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
+import { CreateMessageDto } from '../discussions/create-message.dto';
 
 const DAYS_BEFORE_ARCHIVE = 90;
 
-// The author can only change an announcement that is still active (SDD: Returned, Closed,
-// Deleted and Archived are final; Hidden is decided by an administrator).
-const EDITABLE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
+const EDITABLE_STATUSES = [
+  AnnouncementStatus.Available,
+  AnnouncementStatus.Open,
+];
 
-// SCRUM-22: only these statuses appear in the public gallery. Closed, Returned, Deleted, Hidden
-// and Archived never do.
-const GALLERY_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
+const GALLERY_STATUSES = [
+  AnnouncementStatus.Available,
+  AnnouncementStatus.Open,
+];
 
-// SCRUM-25: the sort orders of the gallery. The id breaks ties, so a page never shows the same
-// announcement twice.
-const GALLERY_ORDERS: Record<'newest' | 'oldest' | 'eventDate', FindOptionsOrder<Announcement>> = {
+const GALLERY_ORDERS: Record<
+  'newest' | 'oldest' | 'eventDate',
+  FindOptionsOrder<Announcement>
+> = {
   newest: { createdAt: 'DESC', id: 'DESC' },
   oldest: { createdAt: 'ASC', id: 'ASC' },
   eventDate: { eventDate: 'DESC', createdAt: 'DESC', id: 'DESC' },
 };
 
-// Turns an empty optional field ("") into null, so the database stores "no value".
 function emptyToNull(value?: string): string | null {
   return value ? value : null;
 }
 
-// Today's date as "YYYY-MM-DD", in the time zone of the server.
 function today(): string {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -58,37 +83,51 @@ export class AnnouncementsService {
   private readonly logger = new Logger(AnnouncementsService.name);
 
   constructor(
-    @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
+    @InjectRepository(Announcement)
+    private readonly announcements: Repository<Announcement>,
     @InjectRepository(AnnouncementMatch)
     private readonly announcementMatches: Repository<AnnouncementMatch>,
-    @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(User)
+    private readonly users: Repository<User>,
     @InjectRepository(Discussion)
     private readonly discussions: Repository<Discussion>,
+    @InjectRepository(Message)
+    private readonly messages: Repository<Message>,
     private readonly reference: ReferenceService,
     private readonly photoStorage: PhotoStorageService,
     private readonly mail: MailService,
     private readonly savedSearches: SavedSearchesService,
   ) {}
 
-  // SCRUM-16 and SCRUM-20: saves a found or lost declaration with its photos.
-  async create(authorId: number, dto: CreateAnnouncementDto, files: Express.Multer.File[]) {
+  // SCRUM-16 and SCRUM-20: create a found or lost announcement.
+  async create(
+    authorId: number,
+    dto: CreateAnnouncementDto,
+    files: Express.Multer.File[],
+  ) {
     const author = await this.users.findOneBy({ id: authorId });
+
     if (!author) {
       throw new NotFoundException('User not found.');
     }
 
     const isFound = dto.type === AnnouncementType.Found;
 
-    // Every check runs before anything is saved, so an error never leaves half an announcement.
-    // Photos: 1 to 4 for a found object (FR-05), optional for a lost one (FR-15).
     if (isFound && files.length < 1) {
       throw new BadRequestException('Add at least one photo.');
     }
-    checkPhotos(files); // SCRUM-19: at most 4 photos, 5 MB each, real JPEG, PNG or WebP
+
+    checkPhotos(files);
+
     if (dto.eventDate > today()) {
       throw new BadRequestException('The date cannot be in the future.');
     }
-    await this.reference.checkSelection(dto.categoryId, dto.objectTypeId, dto.placeId);
+
+    await this.reference.checkSelection(
+      dto.categoryId,
+      dto.objectTypeId,
+      dto.placeId,
+    );
 
     const photos = await this.photoStorage.save(files);
 
@@ -109,142 +148,141 @@ export class AnnouncementsService {
         eventDate: dto.eventDate,
         placeId: dto.placeId,
         placeDetails: emptyToNull(dto.placeDetails),
-        // Only a found object has a current location (SDD integrity rules).
         currentLocation: isFound ? dto.currentLocation : null,
         hiddenDetail: emptyToNull(dto.hiddenDetail),
-        // Initial status: Available for a found object, Open for a lost one.
-        status: isFound ? AnnouncementStatus.Available : AnnouncementStatus.Open,
+        status: isFound
+          ? AnnouncementStatus.Available
+          : AnnouncementStatus.Open,
         expiresAt,
       }),
     );
 
-    // SCRUM-17: confirmation email, for found and lost declarations (FR-07).
-    // It is sent in the background: a mail problem never breaks the declaration (Point B2).
     void this.mail
-      .confirmation(author.email, { id: saved.id, title: saved.title, type: saved.type })
+      .confirmation(author.email, {
+        id: saved.id,
+        title: saved.title,
+        type: saved.type,
+      })
       .catch((err) => {
-        this.logger.error(`Failed to send confirmation email for announcement ${saved.id}`, err);
+        this.logger.error(
+          `Failed to send confirmation email for announcement ${saved.id}`,
+          err,
+        );
       });
 
-    // SCRUM-27: alert the owners of the saved searches that match this new announcement.
-    // Like the confirmation email, it runs in the background and never breaks the declaration.
     void this.savedSearches.notifyMatches(saved).catch((err) => {
-      this.logger.error('Failed to send saved search alerts for announcement ' + saved.id, err);
+      this.logger.error(
+        'Failed to send saved search alerts for announcement ' + saved.id,
+        err,
+      );
     });
-// SCRUM-28: calculate compatible announcements in the background.
-void this.matchAnnouncements(saved).catch((err) => {
-  this.logger.error(
-    `Failed to calculate matches for announcement ${saved.id}`,
-    err instanceof Error ? err.stack : String(err),
-  );
-});
 
-    return { announcement: toOwnerView(await this.findWithDetails(saved.id)) };
-  }
-
-  
-// Detail page: anyone can read an announcement, except a deleted or hidden one.
-// SCRUM-28: find compatible announcements and save their match scores.
-private async matchAnnouncements(source: Announcement): Promise<void> {
-  const oppositeType =
-    source.type === AnnouncementType.Found
-      ? AnnouncementType.Lost
-      : AnnouncementType.Found;
-
-  const candidates = await this.announcements.find({
-    where: {
-      type: oppositeType,
-      status: In(GALLERY_STATUSES),
-    },
-  });
-
-  for (const candidate of candidates) {
-    // Ignore the same announcement and announcements from the same author.
-    if (candidate.id === source.id || candidate.authorId === source.authorId) {
-      continue;
-    }
-
-    const score = this.calculateMatchScore(source, candidate);
-
-    // Only save sufficiently compatible announcements.
-    if (score < 65) {
-      continue;
-    }
-
-    // The database requires announcement_id < matched_announcement_id.
-    const announcementId = Math.min(source.id, candidate.id);
-    const matchedAnnouncementId = Math.max(source.id, candidate.id);
-
-    try {
-      await this.announcementMatches.save(
-        this.announcementMatches.create({
-          announcementId,
-          matchedAnnouncementId,
-          score,
-        }),
+    void this.matchAnnouncements(saved).catch((err) => {
+      this.logger.error(
+        `Failed to calculate matches for announcement ${saved.id}`,
+        err instanceof Error ? err.stack : String(err),
       );
-    } catch (err) {
-      // A duplicate pair may already have been inserted by another background task.
-      this.logger.warn(
-        `Could not save match ${announcementId}/${matchedAnnouncementId}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
+    });
+
+    return {
+      announcement: toOwnerView(await this.findWithDetails(saved.id)),
+    };
+  }
+
+  // SCRUM-28: calculate compatible announcements.
+  private async matchAnnouncements(source: Announcement): Promise<void> {
+    const oppositeType =
+      source.type === AnnouncementType.Found
+        ? AnnouncementType.Lost
+        : AnnouncementType.Found;
+
+    const candidates = await this.announcements.find({
+      where: {
+        type: oppositeType,
+        status: In(GALLERY_STATUSES),
+      },
+    });
+
+    for (const candidate of candidates) {
+      if (
+        candidate.id === source.id ||
+        candidate.authorId === source.authorId
+      ) {
+        continue;
+      }
+
+      const score = this.calculateMatchScore(source, candidate);
+
+      if (score < 65) {
+        continue;
+      }
+
+      const announcementId = Math.min(source.id, candidate.id);
+      const matchedAnnouncementId = Math.max(source.id, candidate.id);
+
+      try {
+        await this.announcementMatches.save(
+          this.announcementMatches.create({
+            announcementId,
+            matchedAnnouncementId,
+            score,
+          }),
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Could not save match ${announcementId}/${matchedAnnouncementId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
-}
 
-private calculateMatchScore(
-  source: Announcement,
-  candidate: Announcement,
-): number {
-  let score = 0;
+  private calculateMatchScore(
+    source: Announcement,
+    candidate: Announcement,
+  ): number {
+    let score = 0;
 
-  // Category and precise object type.
-  if (source.categoryId === candidate.categoryId) score += 25;
-  if (source.objectTypeId === candidate.objectTypeId) score += 30;
+    if (source.categoryId === candidate.categoryId) score += 25;
+    if (source.objectTypeId === candidate.objectTypeId) score += 30;
+    if (source.placeId === candidate.placeId) score += 15;
 
-  // Same place.
-  if (source.placeId === candidate.placeId) score += 15;
+    const sourceDate = Date.parse(`${source.eventDate}T00:00:00Z`);
+    const candidateDate = Date.parse(`${candidate.eventDate}T00:00:00Z`);
+    const daysApart = Math.abs(sourceDate - candidateDate) / 86_400_000;
 
-  // Date proximity.
-  const sourceDate = Date.parse(`${source.eventDate}T00:00:00Z`);
-  const candidateDate = Date.parse(`${candidate.eventDate}T00:00:00Z`);
-  const daysApart = Math.abs(sourceDate - candidateDate) / 86_400_000;
+    if (daysApart <= 7) score += 15;
+    else if (daysApart <= 30) score += 10;
+    else if (daysApart <= 90) score += 5;
 
-  if (daysApart <= 7) score += 15;
-  else if (daysApart <= 30) score += 10;
-  else if (daysApart <= 90) score += 5;
+    if (
+      source.brand?.trim() &&
+      candidate.brand?.trim() &&
+      source.brand.trim().toLowerCase() ===
+        candidate.brand.trim().toLowerCase()
+    ) {
+      score += 7;
+    }
 
-  // Brand.
-  if (
-    source.brand?.trim() &&
-    candidate.brand?.trim() &&
-    source.brand.trim().toLowerCase() === candidate.brand.trim().toLowerCase()
-  ) {
-    score += 7;
+    if (
+      source.color?.trim() &&
+      candidate.color?.trim() &&
+      source.color.trim().toLowerCase() ===
+        candidate.color.trim().toLowerCase()
+    ) {
+      score += 8;
+    }
+
+    return score;
   }
 
-  // Color.
-  if (
-    source.color?.trim() &&
-    candidate.color?.trim() &&
-    source.color.trim().toLowerCase() === candidate.color.trim().toLowerCase()
-  ) {
-    score += 8;
-  }
-
-  return score;
-}
-
-
-  // Jira task: allow an owner to start a discussion with private proof of ownership.
+  // SCRUM-30: start a discussion with proof of ownership.
   async startDiscussion(
     announcementId: number,
     userId: number,
     dto: CreateDiscussionDto,
   ) {
-    // Load the announcement and its author (the finder).
     const announcement = await this.announcements.findOne({
       where: { id: announcementId },
       relations: { author: true },
@@ -272,7 +310,6 @@ private calculateMatchScore(
       );
     }
 
-    // Save the claimant's private proof description.
     const discussion = await this.discussions.save(
       this.discussions.create({
         announcementId: announcement.id,
@@ -281,7 +318,6 @@ private calculateMatchScore(
       }),
     );
 
-    // Notify the finder without revealing the private proof description.
     void this.mail
       .discussionStarted(announcement.author.email, {
         id: announcement.id,
@@ -299,11 +335,179 @@ private calculateMatchScore(
       discussionId: discussion.id,
     };
   }
-async findPublic(id: number) {
+
+  // SCRUM-31: find a discussion and verify its participant.
+  private async findDiscussionForParticipant(
+    discussionId: number,
+    userId: number,
+  ): Promise<Discussion> {
+    const discussion = await this.discussions.findOne({
+      where: { id: discussionId },
+      relations: { announcement: true },
+    });
+
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found.');
+    }
+
+    const isFinder = discussion.announcement.authorId === userId;
+    const isClaimant = discussion.ownerId === userId;
+
+    if (!isFinder && !isClaimant) {
+      throw new ForbiddenException(
+        'You are not a participant in this discussion.',
+      );
+    }
+
+    return discussion;
+  }
+
+  // SCRUM-31: send a message.
+  async sendMessage(
+    discussionId: number,
+    userId: number,
+    dto: CreateMessageDto,
+  ) {
+    await this.findDiscussionForParticipant(discussionId, userId);
+
+    const message = await this.messages.save(
+      this.messages.create({
+        discussionId,
+        senderId: userId,
+        content: dto.content,
+        readAt: null,
+      }),
+    );
+
+    return { message };
+  }
+
+  // SCRUM-31: retrieve messages and mark incoming messages as read.
+  async getMessages(discussionId: number, userId: number) {
+    await this.findDiscussionForParticipant(discussionId, userId);
+
+    await this.messages.update(
+      {
+        discussionId,
+        senderId: Not(userId),
+        readAt: IsNull(),
+      },
+      { readAt: new Date() },
+    );
+
+    const messages = await this.messages.find({
+      where: { discussionId },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+
+    return { messages };
+  }
+
+  // SCRUM-31: count unread messages across all user discussions.
+  async getUnreadCount(userId: number): Promise<{ unreadCount: number }> {
+    const discussions = await this.discussions.find({
+      where: [
+        { ownerId: userId },
+        { announcement: { authorId: userId } },
+      ],
+      relations: { announcement: true },
+    });
+
+    const discussionIds = discussions.map(
+      (discussion) => discussion.id,
+    );
+
+    if (discussionIds.length === 0) {
+      return { unreadCount: 0 };
+    }
+
+    const unreadCount = await this.messages.count({
+      where: {
+        discussionId: In(discussionIds),
+        senderId: Not(userId),
+        readAt: IsNull(),
+      },
+    });
+
+    return { unreadCount };
+  }
+
+  // SCRUM-31: list all conversations belonging to the signed-in user.
+  async getDiscussions(userId: number) {
+    const discussions = await this.discussions.find({
+      where: [
+        { ownerId: userId },
+        { announcement: { authorId: userId } },
+      ],
+      relations: {
+        announcement: { author: true },
+        owner: true,
+      },
+      order: { createdAt: 'DESC' },
+    });
+
+    const conversations = await Promise.all(
+      discussions.map(async (discussion) => {
+        const isFinder =
+          discussion.announcement.authorId === userId;
+
+        const otherParticipant = isFinder
+          ? discussion.owner
+          : discussion.announcement.author;
+
+        const [latestMessages, unreadCount] = await Promise.all([
+          this.messages.find({
+            where: { discussionId: discussion.id },
+            order: { createdAt: 'DESC', id: 'DESC' },
+            take: 1,
+          }),
+          this.messages.count({
+            where: {
+              discussionId: discussion.id,
+              senderId: Not(userId),
+              readAt: IsNull(),
+            },
+          }),
+        ]);
+
+        const lastMessage = latestMessages[0] ?? null;
+
+        return {
+          discussionId: discussion.id,
+          announcementId: discussion.announcementId,
+          announcementTitle: discussion.announcement.title,
+          otherParticipant: {
+            id: otherParticipant.id,
+            firstName: otherParticipant.firstName ?? null,
+            lastName: otherParticipant.lastName ?? null,
+          },
+          lastMessage: lastMessage
+            ? {
+                content: lastMessage.content,
+                senderId: lastMessage.senderId,
+                createdAt: lastMessage.createdAt,
+              }
+            : null,
+          unreadCount,
+          createdAt: discussion.createdAt,
+        };
+      }),
+    );
+
+    return { discussions: conversations };
+  }
+
+  // Public announcement detail.
+  async findPublic(id: number) {
     const announcement = await this.announcements.findOne({
       where: { id },
-      relations: { category: true, objectType: true, place: true },
+      relations: {
+        category: true,
+        objectType: true,
+        place: true,
+      },
     });
+
     if (
       !announcement ||
       announcement.status === AnnouncementStatus.Deleted ||
@@ -311,12 +515,12 @@ async findPublic(id: number) {
     ) {
       throw new NotFoundException('Announcement not found.');
     }
+
     return { announcement: toPublicView(announcement) };
   }
 
-  // SCRUM-29: return public matching announcements for a public announcement.
+  // SCRUM-29: public matching announcements.
   async findPublicMatches(id: number) {
-    // Ensure the source announcement is publicly accessible.
     await this.findPublic(id);
 
     const matches = await this.announcementMatches.find({
@@ -348,7 +552,9 @@ async findPublic(id: number) {
 
         return { score: match.score, other };
       })
-      .filter(({ other }) => GALLERY_STATUSES.includes(other.status));
+      .filter(({ other }) =>
+        GALLERY_STATUSES.includes(other.status),
+      );
 
     return {
       matches: publicMatches.map(({ score, other }) => ({
@@ -358,151 +564,258 @@ async findPublic(id: number) {
     };
   }
 
-  // SCRUM-22: one page of the public gallery, newest first. toPublicView never includes the
-  // hidden detail. Number() makes sure we have numbers even if the query arrives as text.
+  // SCRUM-22: public gallery.
   async findPublicPage(query: ListAnnouncementsQueryDto) {
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
-    // SCRUM-23: an unknown id, or an object that does not belong to the category, answers 400.
-    await this.reference.checkFilters(query.categoryId, query.objectTypeId, query.placeId);
-    // SCRUM-23: each filter that is sent adds one condition; all of them must be true.
-    const where: FindOptionsWhere<Announcement> = { status: In(GALLERY_STATUSES) };
+
+    await this.reference.checkFilters(
+      query.categoryId,
+      query.objectTypeId,
+      query.placeId,
+    );
+
+    const where: FindOptionsWhere<Announcement> = {
+      status: In(GALLERY_STATUSES),
+    };
+
     if (query.categoryId) where.categoryId = query.categoryId;
     if (query.objectTypeId) where.objectTypeId = query.objectTypeId;
     if (query.placeId) where.placeId = query.placeId;
-    if (query.dateFrom && query.dateTo) where.eventDate = Between(query.dateFrom, query.dateTo);
-    else if (query.dateFrom) where.eventDate = MoreThanOrEqual(query.dateFrom);
-    else if (query.dateTo) where.eventDate = LessThanOrEqual(query.dateTo);
 
-    // SCRUM-24: keyword, case does not matter. A % or _ typed by the user is escaped, so it is
-    // read as an ordinary character. With a keyword, one condition per column (OR between them),
-    // and each condition keeps the status and the filters above (AND).
+    if (query.dateFrom && query.dateTo) {
+      where.eventDate = Between(query.dateFrom, query.dateTo);
+    } else if (query.dateFrom) {
+      where.eventDate = MoreThanOrEqual(query.dateFrom);
+    } else if (query.dateTo) {
+      where.eventDate = LessThanOrEqual(query.dateTo);
+    }
+
     const keyword = (query.q ?? '').trim();
-    let conditions: FindOptionsWhere<Announcement> | FindOptionsWhere<Announcement>[] = where;
+
+    let conditions:
+      | FindOptionsWhere<Announcement>
+      | FindOptionsWhere<Announcement>[] = where;
+
     if (keyword) {
-      const pattern = '%' + keyword.replace(/[\\%_]/g, '\\$&') + '%';
+      const pattern =
+        '%' + keyword.replace(/[\\%_]/g, '\\$&') + '%';
+
       conditions = [
         { ...where, title: ILike(pattern) },
         { ...where, description: ILike(pattern) },
       ];
     }
 
-    const [announcements, total] = await this.announcements.findAndCount({
-      where: conditions,
-      relations: { category: true, objectType: true, place: true },
-      order: GALLERY_ORDERS[query.sort ?? 'newest'],
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [announcements, total] =
+      await this.announcements.findAndCount({
+        where: conditions,
+        relations: {
+          category: true,
+          objectType: true,
+          place: true,
+        },
+        order: GALLERY_ORDERS[query.sort ?? 'newest'],
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
     return {
       announcements: announcements.map(toPublicView),
-      meta: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
     };
   }
 
-  // SCRUM-18: the announcements of the signed-in user, newest first, with their hidden detail.
+  // SCRUM-18: list the signed-in user's announcements.
   async findMine(userId: number) {
     const announcements = await this.announcements.find({
-      where: { authorId: userId, status: Not(AnnouncementStatus.Deleted) },
-      relations: { category: true, objectType: true, place: true },
+      where: {
+        authorId: userId,
+        status: Not(AnnouncementStatus.Deleted),
+      },
+      relations: {
+        category: true,
+        objectType: true,
+        place: true,
+      },
       order: { createdAt: 'DESC' },
     });
-    return { announcements: announcements.map(toOwnerView) };
+
+    return {
+      announcements: announcements.map(toOwnerView),
+    };
   }
 
-  // SCRUM-18: one announcement of the signed-in user, for the edit page.
+  // SCRUM-18: read one of the signed-in user's announcements.
   async findMineById(userId: number, id: number) {
-    return { announcement: toOwnerView(await this.findOwned(userId, id)) };
+    return {
+      announcement: toOwnerView(
+        await this.findOwned(userId, id),
+      ),
+    };
   }
 
-
-  // SCRUM-18: the author changes some fields of an active announcement.
-  // SCRUM-21: the author of a lost announcement can also close it (status: Closed).
-  async update(userId: number, id: number, dto: UpdateAnnouncementDto) {
+  // SCRUM-18 and SCRUM-21: update an announcement.
+  async update(
+    userId: number,
+    id: number,
+    dto: UpdateAnnouncementDto,
+  ) {
     const announcement = await this.findOwned(userId, id);
     this.assertEditable(announcement);
 
-    if (dto.status === AnnouncementStatus.Closed && announcement.type !== AnnouncementType.Lost) {
-      throw new ConflictException('Only a lost announcement can be closed.');
+    if (
+      dto.status === AnnouncementStatus.Closed &&
+      announcement.type !== AnnouncementType.Lost
+    ) {
+      throw new ConflictException(
+        'Only a lost announcement can be closed.',
+      );
     }
 
     if (dto.eventDate !== undefined && dto.eventDate > today()) {
-      throw new BadRequestException('The date cannot be in the future.');
-    }
-    if (dto.hiddenDetail === '' && announcement.type === AnnouncementType.Found) {
-      throw new BadRequestException('Enter a hidden detail that only the owner knows.');
+      throw new BadRequestException(
+        'The date cannot be in the future.',
+      );
     }
 
-    // If one of the three choices changes, the new combination is checked as a whole.
+    if (
+      dto.hiddenDetail === '' &&
+      announcement.type === AnnouncementType.Found
+    ) {
+      throw new BadRequestException(
+        'Enter a hidden detail that only the owner knows.',
+      );
+    }
+
     const categoryId = dto.categoryId ?? announcement.categoryId;
     const objectTypeId = dto.objectTypeId ?? announcement.objectTypeId;
     const placeId = dto.placeId ?? announcement.placeId;
-    if (dto.categoryId !== undefined || dto.objectTypeId !== undefined || dto.placeId !== undefined) {
-      await this.reference.checkSelection(categoryId, objectTypeId, placeId);
+
+    if (
+      dto.categoryId !== undefined ||
+      dto.objectTypeId !== undefined ||
+      dto.placeId !== undefined
+    ) {
+      await this.reference.checkSelection(
+        categoryId,
+        objectTypeId,
+        placeId,
+      );
     }
 
-    // Copies the fields that are present in the request. "undefined" means "not sent".
     if (dto.title !== undefined) announcement.title = dto.title;
-    if (dto.description !== undefined) announcement.description = dto.description;
-    if (dto.brand !== undefined) announcement.brand = emptyToNull(dto.brand);
-    if (dto.color !== undefined) announcement.color = emptyToNull(dto.color);
-    if (dto.eventDate !== undefined) announcement.eventDate = dto.eventDate;
-    if (dto.placeDetails !== undefined) announcement.placeDetails = emptyToNull(dto.placeDetails);
-    if (dto.hiddenDetail !== undefined) announcement.hiddenDetail = emptyToNull(dto.hiddenDetail);
+    if (dto.description !== undefined) {
+      announcement.description = dto.description;
+    }
+    if (dto.brand !== undefined) {
+      announcement.brand = emptyToNull(dto.brand);
+    }
+    if (dto.color !== undefined) {
+      announcement.color = emptyToNull(dto.color);
+    }
+    if (dto.eventDate !== undefined) {
+      announcement.eventDate = dto.eventDate;
+    }
+    if (dto.placeDetails !== undefined) {
+      announcement.placeDetails = emptyToNull(dto.placeDetails);
+    }
+    if (dto.hiddenDetail !== undefined) {
+      announcement.hiddenDetail = emptyToNull(dto.hiddenDetail);
+    }
+
     announcement.categoryId = categoryId;
     announcement.objectTypeId = objectTypeId;
     announcement.placeId = placeId;
+
     if (dto.status === AnnouncementStatus.Closed) {
-      announcement.status = AnnouncementStatus.Closed; // final status: no more edit or delete
+      announcement.status = AnnouncementStatus.Closed;
     }
 
     await this.saveFields(announcement);
-    return { announcement: toOwnerView(await this.findWithDetails(id)) };
+
+    return {
+      announcement: toOwnerView(
+        await this.findWithDetails(id),
+      ),
+    };
   }
 
-  // SCRUM-18: logical deletion. The row stays in the database with the status Deleted.
+  // SCRUM-18: logical deletion.
   async remove(userId: number, id: number): Promise<void> {
     const announcement = await this.findOwned(userId, id);
     this.assertEditable(announcement);
+
     announcement.status = AnnouncementStatus.Deleted;
+
     await this.saveFields(announcement);
   }
 
-  // Finds an announcement and checks that the signed-in user is its author.
-  // 404 if it does not exist (or is deleted), 403 if it belongs to someone else.
-  private async findOwned(userId: number, id: number): Promise<Announcement> {
+  // Find an announcement and verify its author.
+  private async findOwned(
+    userId: number,
+    id: number,
+  ): Promise<Announcement> {
     const announcement = await this.announcements.findOne({
       where: { id },
-      relations: { category: true, objectType: true, place: true },
+      relations: {
+        category: true,
+        objectType: true,
+        place: true,
+      },
     });
-    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
+
+    if (
+      !announcement ||
+      announcement.status === AnnouncementStatus.Deleted
+    ) {
       throw new NotFoundException('Announcement not found.');
     }
+
     if (announcement.authorId !== userId) {
-      throw new ForbiddenException('You can only change your own announcements.');
+      throw new ForbiddenException(
+        'You can only change your own announcements.',
+      );
     }
+
     return announcement;
   }
 
-  // 409 if the announcement is no longer active (SDD: invalid transition).
   private assertEditable(announcement: Announcement): void {
     if (!EDITABLE_STATUSES.includes(announcement.status)) {
-      throw new ConflictException(`This announcement is ${announcement.status} and can no longer be changed.`);
+      throw new ConflictException(
+        `This announcement is ${announcement.status} and can no longer be changed.`,
+      );
     }
   }
 
-  // Saves the changed columns only. The loaded relations are removed first, otherwise TypeORM
-  // would take the old category, precise object or place from them instead of the new ids.
-  private async saveFields(announcement: Announcement): Promise<void> {
-    const { category, objectType, place, author, ...columns } = announcement;
+  private async saveFields(
+    announcement: Announcement,
+  ): Promise<void> {
+    const {
+      category,
+      objectType,
+      place,
+      author,
+      ...columns
+    } = announcement;
+
     await this.announcements.save(columns);
   }
 
-  // Loads an announcement with the names of its category, precise object and place.
   private async findWithDetails(id: number): Promise<Announcement> {
     return this.announcements.findOneOrFail({
       where: { id },
-      relations: { category: true, objectType: true, place: true },
+      relations: {
+        category: true,
+        objectType: true,
+        place: true,
+      },
     });
   }
 }

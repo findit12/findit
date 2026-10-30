@@ -928,3 +928,175 @@ button:focus-visible,
     align-items: flex-start;
   }
 }
+/* ---------------------------------------------------------------------
+   SCRUM-31: Messaging inbox and conversation layout
+   --------------------------------------------------------------------- */
+
+main:has(.messages-layout) {
+  width: min(100% - 32px, 1060px);
+}
+
+.messages-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.5fr);
+  gap: 20px;
+  margin-top: 24px;
+  min-height: 480px;
+}
+
+.messages-inbox,
+.messages-chat {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--rose-ligne);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.messages-inbox h2,
+.messages-chat h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.messages-inbox .my-list {
+  gap: 8px;
+}
+
+.messages-inbox .my-list li {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.conversation-button {
+  display: grid;
+  width: 100%;
+  gap: 5px;
+  padding: 13px;
+  text-align: left;
+  color: var(--bordeaux);
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--rose-ligne);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.conversation-button:hover,
+.conversation-selected .conversation-button {
+  border-color: var(--framboise);
+  background: var(--rose-pale);
+}
+
+.conversation-button span,
+.conversation-button small {
+  overflow-wrap: anywhere;
+}
+
+.conversation-button span {
+  font-size: 0.85rem;
+}
+
+.conversation-button small {
+  margin: 0;
+}
+
+.unread-count {
+  width: fit-content;
+  padding: 3px 9px;
+  color: #fff;
+  background: var(--framboise);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.chat-header {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rose-ligne);
+}
+
+.chat-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 280px;
+  max-height: 430px;
+  overflow-y: auto;
+  padding: 18px 4px;
+}
+
+.chat-message {
+  max-width: 80%;
+  padding: 11px 14px;
+  border-radius: 15px;
+  overflow-wrap: anywhere;
+}
+
+.chat-message p {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+}
+
+.chat-message small {
+  display: block;
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.own-message {
+  align-self: flex-end;
+  color: #fff;
+  background: var(--framboise);
+  border-bottom-right-radius: 4px;
+}
+
+.own-message small {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.other-message {
+  align-self: flex-start;
+  color: var(--bordeaux);
+  background: var(--rose-pale);
+  border-bottom-left-radius: 4px;
+}
+
+.chat-form {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--rose-ligne);
+}
+
+.chat-form textarea {
+  min-height: 75px;
+  resize: vertical;
+}
+
+.chat-form button {
+  justify-self: end;
+}
+
+@media (max-width: 700px) {
+  .messages-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .messages-inbox,
+  .messages-chat {
+    padding: 14px;
+  }
+
+  .chat-message {
+    max-width: 90%;
+  }
+}

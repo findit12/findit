@@ -9,7 +9,7 @@ import { AnnouncementMatch } from './announcement-match.entity';
 import { Discussion } from '../discussions/discussion.entity';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ILike, In, MoreThanOrEqual } from 'typeorm';
+import { ILike, In, IsNull, MoreThanOrEqual, Not } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -23,6 +23,7 @@ import { CreateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
+import { Message } from '../discussions/message.entity';
 
 function photo(): Express.Multer.File {
   return {
@@ -123,6 +124,13 @@ describe('AnnouncementsService', () => {
     find: jest.Mock;
     findOne: jest.Mock;
   };
+  let messages: {
+    create: jest.Mock;
+    save: jest.Mock;
+    find: jest.Mock;
+    update: jest.Mock;
+    count: jest.Mock;
+  };
 
   beforeEach(async () => {
     announcements = {
@@ -168,6 +176,16 @@ describe('AnnouncementsService', () => {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
     };
+messages = {
+  create: jest.fn((data) => data),
+  save: jest.fn().mockImplementation(async (data) => ({
+    id: 1,
+    ...data,
+  })),
+  find: jest.fn().mockResolvedValue([]),
+  update: jest.fn().mockResolvedValue({ affected: 0 }),
+  count: jest.fn().mockResolvedValue(0),
+};
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -189,6 +207,10 @@ describe('AnnouncementsService', () => {
           provide: getRepositoryToken(Discussion),
           useValue: discussions,
         },
+{
+  provide: getRepositoryToken(Message),
+  useValue: messages,
+},
         {
           provide: getRepositoryToken(User),
           useValue: users,
@@ -966,6 +988,277 @@ describe('AnnouncementsService', () => {
       ).rejects.toThrow(NotFoundException);
 
       expect(discussions.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SCRUM-31 messaging', () => {
+    const discussion = {
+      id: 1,
+      ownerId: 2,
+      announcement: {
+        authorId: 1,
+      },
+    };
+
+    beforeEach(() => {
+      discussions.findOne.mockResolvedValue(discussion);
+    });
+
+    describe('sendMessage', () => {
+      it('allows a participant to send a message', async () => {
+        const result = await service.sendMessage(1, 2, {
+          content: 'I can collect the phone tomorrow.',
+        });
+
+        expect(discussions.findOne).toHaveBeenCalledWith({
+          where: { id: 1 },
+          relations: { announcement: true },
+        });
+
+        expect(messages.create).toHaveBeenCalledWith({
+          discussionId: 1,
+          senderId: 2,
+          content: 'I can collect the phone tomorrow.',
+          readAt: null,
+        });
+
+        expect(messages.save).toHaveBeenCalled();
+        expect(result.message).toMatchObject({
+          discussionId: 1,
+          senderId: 2,
+          content: 'I can collect the phone tomorrow.',
+        });
+      });
+
+      it('rejects a user who is not a participant', async () => {
+        await expect(
+          service.sendMessage(1, 3, {
+            content: 'Hello',
+          }),
+        ).rejects.toThrow(ForbiddenException);
+
+        expect(messages.save).not.toHaveBeenCalled();
+      });
+
+      it('returns 404 when the discussion does not exist', async () => {
+        discussions.findOne.mockResolvedValue(null);
+
+        await expect(
+          service.sendMessage(999, 2, {
+            content: 'Hello',
+          }),
+        ).rejects.toThrow(NotFoundException);
+
+        expect(messages.save).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getMessages', () => {
+      it('returns messages and marks incoming messages as read', async () => {
+        const conversationMessages = [
+          {
+            id: 1,
+            discussionId: 1,
+            senderId: 2,
+            content: 'Hello',
+          },
+          {
+            id: 2,
+            discussionId: 1,
+            senderId: 1,
+            content: 'Hello, how can I help?',
+          },
+        ];
+
+        messages.find.mockResolvedValue(conversationMessages);
+
+        const result = await service.getMessages(1, 2);
+
+        expect(messages.update).toHaveBeenCalledWith(
+          {
+            discussionId: 1,
+            senderId: Not(2),
+            readAt: IsNull(),
+          },
+          {
+            readAt: expect.any(Date),
+          },
+        );
+
+        expect(messages.find).toHaveBeenCalledWith({
+          where: { discussionId: 1 },
+          order: { createdAt: 'ASC', id: 'ASC' },
+        });
+
+        expect(result.messages).toEqual(conversationMessages);
+      });
+
+      it('rejects a user who is not a participant', async () => {
+        await expect(
+          service.getMessages(1, 3),
+        ).rejects.toThrow(ForbiddenException);
+
+        expect(messages.find).not.toHaveBeenCalled();
+        expect(messages.update).not.toHaveBeenCalled();
+      });
+
+      it('returns 404 when the discussion does not exist', async () => {
+        discussions.findOne.mockResolvedValue(null);
+
+        await expect(
+          service.getMessages(999, 2),
+        ).rejects.toThrow(NotFoundException);
+      });
+    });
+
+        describe('getUnreadCount', () => {
+      it('counts unread messages across the user discussions', async () => {
+        discussions.find.mockResolvedValue([
+          { id: 1 },
+          { id: 2 },
+        ]);
+
+        messages.count.mockResolvedValue(3);
+
+        const result = await service.getUnreadCount(2);
+
+        expect(discussions.find).toHaveBeenCalledWith({
+          where: [
+            { ownerId: 2 },
+            { announcement: { authorId: 2 } },
+          ],
+          relations: { announcement: true },
+        });
+
+        expect(messages.count).toHaveBeenCalledWith({
+          where: {
+            discussionId: In([1, 2]),
+            senderId: Not(2),
+            readAt: IsNull(),
+          },
+        });
+
+        expect(result).toEqual({ unreadCount: 3 });
+      });
+
+      it('returns zero without querying messages when there are no discussions', async () => {
+        discussions.find.mockResolvedValue([]);
+
+        const result = await service.getUnreadCount(2);
+
+        expect(result).toEqual({ unreadCount: 0 });
+        expect(messages.count).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getDiscussions', () => {
+      it('shows the claimant to the finder in the inbox', async () => {
+        discussions.find.mockResolvedValue([
+          {
+            id: 1,
+            announcementId: 7,
+            ownerId: 2,
+            description: 'Private proof description',
+            createdAt: new Date('2026-10-20T10:00:00Z'),
+            announcement: {
+              authorId: 1,
+              title: 'Black phone',
+              author: {
+                id: 1,
+                firstName: 'Finder',
+                lastName: 'One',
+              },
+            },
+            owner: {
+              id: 2,
+              firstName: 'Claimant',
+              lastName: 'Two',
+            },
+          },
+        ]);
+
+        messages.find.mockResolvedValue([
+          {
+            content: 'I can collect it tomorrow.',
+            senderId: 2,
+            createdAt: new Date('2026-10-20T11:00:00Z'),
+          },
+        ]);
+
+        messages.count.mockResolvedValue(1);
+
+        const result = await service.getDiscussions(1);
+
+        expect(result.discussions).toHaveLength(1);
+        expect(result.discussions[0]).toMatchObject({
+          discussionId: 1,
+          announcementId: 7,
+          announcementTitle: 'Black phone',
+          otherParticipant: {
+            id: 2,
+            firstName: 'Claimant',
+            lastName: 'Two',
+          },
+          lastMessage: {
+            content: 'I can collect it tomorrow.',
+            senderId: 2,
+          },
+          unreadCount: 1,
+        });
+
+        expect(result.discussions[0]).not.toHaveProperty('description');
+      });
+
+      it('shows the finder to the claimant in the inbox', async () => {
+        discussions.find.mockResolvedValue([
+          {
+            id: 1,
+            announcementId: 7,
+            ownerId: 2,
+            description: 'Private proof description',
+            createdAt: new Date('2026-10-20T10:00:00Z'),
+            announcement: {
+              authorId: 1,
+              title: 'Black phone',
+              author: {
+                id: 1,
+                firstName: 'Finder',
+                lastName: 'One',
+              },
+            },
+            owner: {
+              id: 2,
+              firstName: 'Claimant',
+              lastName: 'Two',
+            },
+          },
+        ]);
+
+        messages.find.mockResolvedValue([]);
+        messages.count.mockResolvedValue(0);
+
+        const result = await service.getDiscussions(2);
+
+        expect(result.discussions[0].otherParticipant).toEqual({
+          id: 1,
+          firstName: 'Finder',
+          lastName: 'One',
+        });
+
+        expect(result.discussions[0].lastMessage).toBeNull();
+        expect(result.discussions[0].unreadCount).toBe(0);
+        expect(result.discussions[0]).not.toHaveProperty('description');
+      });
+
+      it('returns an empty list when the user has no discussions', async () => {
+        discussions.find.mockResolvedValue([]);
+
+        const result = await service.getDiscussions(2);
+
+        expect(result).toEqual({ discussions: [] });
+        expect(messages.find).not.toHaveBeenCalled();
+        expect(messages.count).not.toHaveBeenCalled();
+      });
     });
   });
 });
