@@ -336,6 +336,60 @@ export class AnnouncementsService {
     };
   }
 
+  // SCRUM-32: finder confirms that the item has been handed over.
+  async returnItem(
+    userId: number,
+    announcementId: number,
+    discussionId: number,
+  ) {
+    const announcement = await this.findOwned(userId, announcementId);
+
+    if (announcement.type !== AnnouncementType.Found) {
+      throw new BadRequestException(
+        'Only found announcements can be marked as returned.',
+      );
+    }
+
+    if (announcement.status !== AnnouncementStatus.Available) {
+      throw new ConflictException(
+        'This announcement is no longer available.',
+      );
+    }
+
+    const discussion = await this.discussions.findOne({
+      where: { id: discussionId, announcementId },
+      relations: { owner: true },
+    });
+
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found.');
+    }
+
+    announcement.status = AnnouncementStatus.Returned;
+    announcement.returnedAt = new Date();
+
+    await this.saveFields(announcement);
+
+    void this.mail
+      .handover(discussion.owner.email, {
+        id: announcement.id,
+        title: announcement.title,
+      })
+      .catch((err) => {
+        this.logger.error(
+          `Failed to notify claimant about handover for announcement ${announcement.id}`,
+          err,
+        );
+      });
+
+    return {
+      message: 'Handover confirmed successfully.',
+      announcementId: announcement.id,
+      status: announcement.status,
+      returnedAt: announcement.returnedAt,
+    };
+  }
+
   // SCRUM-31: find a discussion and verify its participant.
   private async findDiscussionForParticipant(
     discussionId: number,
@@ -368,7 +422,13 @@ export class AnnouncementsService {
     userId: number,
     dto: CreateMessageDto,
   ) {
-    await this.findDiscussionForParticipant(discussionId, userId);
+    const discussion = await this.findDiscussionForParticipant(discussionId, userId);
+    const recipientId =
+      discussion.ownerId === userId
+        ? discussion.announcement.authorId
+        : discussion.ownerId;
+
+    const recipient = await this.users.findOneBy({ id: recipientId });
 
     const message = await this.messages.save(
       this.messages.create({
@@ -378,6 +438,20 @@ export class AnnouncementsService {
         readAt: null,
       }),
     );
+
+    if (recipient) {
+      void this.mail
+        .newMessage(recipient.email, {
+          announcementId: discussion.announcement.id,
+          announcementTitle: discussion.announcement.title,
+        })
+        .catch((err) => {
+          this.logger.error(
+            `Failed to notify user ${recipient.id} about message ${message.id}`,
+            err,
+          );
+        });
+    }
 
     return { message };
   }

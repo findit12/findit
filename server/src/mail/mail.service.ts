@@ -30,21 +30,51 @@ export class MailService {
     return raw.split(',')[0].trim();
   }
 
-  // Writes the email as an HTML file in server/dev-emails. "intro" is an optional sentence
-  // shown before the link; it is escaped because it can contain text typed by a user.
+  // SCRUM-32: notify the other participant when a new message is sent.
+  async newMessage(
+    to: string,
+    details: { announcementId: number; announcementTitle: string },
+  ): Promise<void> {
+    const base = this.getClientBaseUrl();
+
+    await this.send(
+      to,
+      'You have a new FindIt message',
+      `${base}/messages`,
+      `You have received a new message in the discussion about "${details.announcementTitle}". Sign in to FindIt to reply.`,
+    );
+  }
+
+  // Writes the email as an HTML file in server/dev-emails.
+  // Retries up to 3 times if saving the email fails.
   private async send(to: string, subject: string, url: string, intro?: string): Promise<void> {
-    try {
-      await mkdir(this.dir, { recursive: true });
-      const name = `${Date.now()}-${Math.random().toString(16).slice(2)}.html`;
-      const introHtml = intro ? `<p>${escapeHtml(intro)}</p>` : '';
-      await writeFile(
-        path.join(this.dir, name),
-        `<h1>${subject}</h1><p>To: ${to}</p>${introHtml}<p><a href="${url}">${url}</a></p>`,
-      );
-      this.logger.log(`Local email saved: ${path.join(this.dir, name)}`);
-    } catch (error) {
-      this.logger.error('Email could not be saved', error);
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await mkdir(this.dir, { recursive: true });
+
+        const name = `${Date.now()}-${Math.random().toString(16).slice(2)}.html`;
+        const introHtml = intro ? `<p>${escapeHtml(intro)}</p>` : '';
+
+        await this.writePreview(
+          path.join(this.dir, name),
+          `<h1>${subject}</h1><p>To: ${to}</p>${introHtml}<p><a href="${url}">${url}</a></p>`,
+        );
+
+        this.logger.log(`Local email saved: ${path.join(this.dir, name)}`);
+        return;
+      } catch (error) {
+        if (attempt < 3) {
+          this.logger.warn(`Email save failed. Retrying (${attempt}/3)...`);
+          await new Promise((resolve) => setTimeout(resolve, attempt * 100));
+        } else {
+          this.logger.error('Email could not be saved after 3 attempts', error);
+        }
+      }
     }
+  }
+
+  private async writePreview(filePath: string, content: string): Promise<void> {
+    await writeFile(filePath, content);
   }
 
   async verification(to: string, token: string): Promise<void> {
@@ -93,6 +123,22 @@ export class MailService {
     await this.send(
       to,
       'Someone wants to claim your found object',
+      `${base}/announcements/${announcement.id}`,
+      intro,
+    );
+  }
+  // SCRUM-32: notify the claimant when the finder confirms the handover.
+  async handover(
+    to: string,
+    announcement: { id: number; title: string },
+  ): Promise<void> {
+    const base = this.getClientBaseUrl();
+
+    const intro = `The finder has confirmed the handover of "${announcement.title}". The item has been marked as returned.`;
+
+    await this.send(
+      to,
+      'Your FindIt item handover is confirmed',
       `${base}/announcements/${announcement.id}`,
       intro,
     );

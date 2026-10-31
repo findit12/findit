@@ -1,3 +1,4 @@
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -46,5 +47,54 @@ describe('MailService', () => {
     expect(html).toContain('Your lost object is published on FindIt');
     expect(html).toContain('Scarf &lt;b&gt;blue&lt;/b&gt;');
     expect(html).toContain('http://localhost:5173/announcements/43');
+  });
+
+  it('writes a new-message notification email (SCRUM-32)', async () => {
+    await service.newMessage('finder@school.edu', {
+      announcementId: 42,
+      announcementTitle: 'Black phone',
+    });
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const files = await readdir(dir);
+    const newest = files.sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('You have a new FindIt message');
+    expect(html).toContain('Black phone');
+    expect(html).toContain('http://localhost:5173/messages');
+  });
+
+  it('retries saving an email preview after a temporary failure (SCRUM-32)', async () => {
+    const writePreviewSpy = jest
+      .spyOn(service as any, 'writePreview')
+      .mockRejectedValueOnce(new Error('Temporary disk error'))
+      .mockResolvedValueOnce(undefined);
+
+    try {
+      await service.newMessage('finder@school.edu', {
+        announcementId: 42,
+        announcementTitle: 'Black phone',
+      });
+
+      expect(writePreviewSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      writePreviewSpy.mockRestore();
+    }
+  });
+  it('writes a handover confirmation email (SCRUM-32)', async () => {
+    await service.handover('claimant@school.edu', {
+      id: 42,
+      title: 'Black phone',
+    });
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const files = await readdir(dir);
+    const newest = files.sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('Your FindIt item handover is confirmed');
+    expect(html).toContain('Black phone');
+    expect(html).toContain('http://localhost:5173/announcements/42');
   });
 });

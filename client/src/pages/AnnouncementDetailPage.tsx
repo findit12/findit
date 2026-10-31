@@ -23,6 +23,11 @@ export default function AnnouncementDetailPage() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [error, setError] = useState('');
   const [matches, setMatches] = useState<Announcement[]>([]);
+  const [discussions, setDiscussions] = useState<
+  { discussionId: number; announcementId: number }[]
+>([]);
+  const [handoverError, setHandoverError] = useState('');
+  const [confirmingHandover, setConfirmingHandover] = useState(false);
 
   // Jira task: proof of ownership and discussion submission.
   const [proofDescription, setProofDescription] = useState('');
@@ -31,16 +36,22 @@ export default function AnnouncementDetailPage() {
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
 
   useEffect(() => {
-    apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
-      .then((data) => setAnnouncement(data.announcement))
-      .catch((err: Error) => setError(err.message));
+  apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
+    .then((data) => setAnnouncement(data.announcement))
+    .catch((err: Error) => setError(err.message));
 
-    apiRequest<AnnouncementMatchesResponse>(`/announcements/${id}/matches`)
-      .then((data) =>
-        setMatches(data.matches.map((match) => match.announcement)),
-      )
-      .catch(() => setMatches([]));
-  }, [id]);
+  apiRequest<{
+    discussions: { discussionId: number; announcementId: number }[];
+  }>('/announcements/discussions', { token })
+    .then((data) => setDiscussions(data.discussions))
+    .catch(() => setDiscussions([]));
+
+  apiRequest<AnnouncementMatchesResponse>(`/announcements/${id}/matches`)
+    .then((data) =>
+      setMatches(data.matches.map((match) => match.announcement)),
+    )
+    .catch(() => setMatches([]));
+}, [id, token]);
 
   async function remove() {
     if (
@@ -92,6 +103,43 @@ export default function AnnouncementDetailPage() {
   }
 
   // Jira task: submit private proof of ownership and start a discussion.
+
+async function confirmHandover() {
+  if (!announcement || !handoverDiscussion || !token) {
+    return;
+  }
+
+  if (
+    !window.confirm(
+      `Confirm that "${announcement.title}" has been handed over to its owner?`,
+    )
+  ) {
+    return;
+  }
+
+  setHandoverError('');
+  setConfirmingHandover(true);
+
+  try {
+    await apiRequest(
+      `/announcements/${announcement.id}/discussions/${handoverDiscussion.discussionId}/return`,
+      {
+        method: 'POST',
+        token,
+      },
+    );
+
+    setAnnouncement({
+      ...announcement,
+      status: 'Returned',
+    });
+  } catch (err) {
+    setHandoverError((err as Error).message);
+  } finally {
+    setConfirmingHandover(false);
+  }
+}
+
   async function startDiscussion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -133,6 +181,17 @@ export default function AnnouncementDetailPage() {
   if (!announcement) {
     return <section className="card">Loadingâ€¦</section>;
   }
+
+const handoverDiscussion = discussions.find(
+  (discussion) => discussion.announcementId === announcement.id,
+);
+
+const canConfirmHandover =
+  Boolean(token) &&
+  announcement.type === 'found' &&
+  announcement.status === 'Available' &&
+  announcement.authorId === userId &&
+  Boolean(handoverDiscussion);
 
   const canStartDiscussion =
     Boolean(token) &&
@@ -216,6 +275,28 @@ export default function AnnouncementDetailPage() {
         <dt>Status</dt>
         <dd>{announcement.status}</dd>
       </dl>
+
+{/* SCRUM-32: Finder confirms that the item has been handed over. */}
+{canConfirmHandover && (
+  <div className="owner-actions">
+    {handoverError && (
+      <p className="notice error" role="alert">
+        {handoverError}
+      </p>
+    )}
+
+    <button
+      type="button"
+      className="primary"
+      onClick={confirmHandover}
+      disabled={confirmingHandover}
+    >
+      {confirmingHandover
+        ? 'Confirming...'
+        : 'Confirm Handover'}
+    </button>
+  </div>
+)}
 
       {/* Only the author sees these buttons. The server checks it again. */}
       {announcement.authorId === userId && isEditable(announcement) && (
