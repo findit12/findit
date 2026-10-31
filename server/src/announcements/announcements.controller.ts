@@ -1,4 +1,3 @@
-
 import {
   Body,
   Controller,
@@ -85,17 +84,18 @@ export class AnnouncementsController {
     return this.service.findMineById(userId, id);
   }
 
+  // SCRUM-31: list conversations for the signed-in user.
+  @Get('discussions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List my conversations' })
+  @ApiResponse({ status: 200, description: 'User conversations' })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  getDiscussions(@CurrentUserId() userId: number) {
+    return this.service.getDiscussions(userId);
+  }
+
   // SCRUM-31: count unread messages for the signed-in user.
-// SCRUM-31: list conversations for the signed-in user.
-@Get('discussions')
-@UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-@ApiOperation({ summary: 'List my conversations' })
-@ApiResponse({ status: 200, description: 'User conversations' })
-@ApiResponse({ status: 401, description: 'Not signed in' })
-getDiscussions(@CurrentUserId() userId: number) {
-  return this.service.getDiscussions(userId);
-}
   @Get('discussions/unread-count')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -125,7 +125,7 @@ getDiscussions(@CurrentUserId() userId: number) {
   @Post('discussions/:discussionId/messages')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send a message in a conversation' })
+  @ApiOperation({ summary: 'Send a message in a discussion' })
   @ApiResponse({ status: 201, description: 'Message sent successfully' })
   @ApiResponse({ status: 400, description: 'Invalid message content' })
   @ApiResponse({ status: 403, description: 'Not a discussion participant' })
@@ -182,6 +182,23 @@ getDiscussions(@CurrentUserId() userId: number) {
     @Body() dto: CreateDiscussionDto,
   ) {
     return this.service.startDiscussion(id, userId, dto);
+  }
+
+  // SCRUM-32: finder confirms that the item has been handed over.
+  @Post(':id/discussions/:discussionId/return')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Confirm handover of a found object to a claimant' })
+  @ApiResponse({ status: 201, description: 'Handover confirmed' })
+  @ApiResponse({ status: 403, description: 'Only the finder can confirm the handover' })
+  @ApiResponse({ status: 404, description: 'Announcement or discussion not found' })
+  @ApiResponse({ status: 409, description: 'Announcement is no longer available' })
+  returnItem(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('discussionId', ParseIntPipe) discussionId: number,
+  ) {
+    return this.service.returnItem(userId, id, discussionId);
   }
 
   @Get(':id/matches')

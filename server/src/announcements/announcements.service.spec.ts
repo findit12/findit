@@ -114,6 +114,8 @@ describe('AnnouncementsService', () => {
   let mail: {
     confirmation: jest.Mock;
     discussionStarted: jest.Mock;
+    newMessage: jest.Mock;
+    handover: jest.Mock;
   };
 
   let savedSearches: { notifyMatches: jest.Mock };
@@ -161,6 +163,8 @@ describe('AnnouncementsService', () => {
     mail = {
       confirmation: jest.fn().mockResolvedValue(undefined),
       discussionStarted: jest.fn().mockResolvedValue(undefined),
+      newMessage: jest.fn().mockResolvedValue(undefined),
+      handover: jest.fn().mockResolvedValue(undefined),
     };
 
     savedSearches = {
@@ -991,14 +995,109 @@ messages = {
     });
   });
 
-  describe('SCRUM-31 messaging', () => {
+  describe('returnItem (SCRUM-32)', () => {
+    const announcement = {
+      ...storedAnnouncement(),
+      authorId: 1,
+      type: AnnouncementType.Found,
+      status: AnnouncementStatus.Available,
+      title: 'Black phone',
+      returnedAt: null,
+    };
+
     const discussion = {
       id: 1,
+      announcementId: 7,
       ownerId: 2,
-      announcement: {
-        authorId: 1,
+      owner: {
+        id: 2,
+        email: 'claimant@school.test',
       },
     };
+
+    beforeEach(() => {
+      announcements.findOne.mockResolvedValue(announcement);
+      discussions.findOne.mockResolvedValue(discussion);
+    });
+
+    it('allows the finder to confirm handover and notifies the claimant', async () => {
+      const result = await service.returnItem(1, 7, 1);
+
+      expect(discussions.findOne).toHaveBeenCalledWith({
+        where: { id: 1, announcementId: 7 },
+        relations: { owner: true },
+      });
+
+      expect(announcements.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: AnnouncementStatus.Returned,
+          returnedAt: expect.any(Date),
+        }),
+      );
+
+      expect(mail.handover).toHaveBeenCalledWith(
+        'claimant@school.test',
+        {
+          id: 7,
+          title: 'Black phone',
+        },
+      );
+
+      expect(result.status).toBe(AnnouncementStatus.Returned);
+    });
+
+    it('does not allow another user to confirm handover', async () => {
+      await expect(
+        service.returnItem(2, 7, 1),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(announcements.save).not.toHaveBeenCalled();
+      expect(mail.handover).not.toHaveBeenCalled();
+    });
+
+    it('rejects a discussion belonging to another announcement', async () => {
+  announcements.findOne.mockResolvedValue({
+    ...storedAnnouncement(),
+    authorId: 1,
+    type: AnnouncementType.Found,
+    status: AnnouncementStatus.Available,
+  });
+
+  discussions.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.returnItem(1, 7, 99),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(announcements.save).not.toHaveBeenCalled();
+      expect(mail.handover).not.toHaveBeenCalled();
+    });
+
+    it('rejects an announcement that is already returned', async () => {
+      announcements.findOne.mockResolvedValue({
+        ...announcement,
+        status: AnnouncementStatus.Returned,
+      });
+
+      await expect(
+        service.returnItem(1, 7, 1),
+      ).rejects.toThrow(ConflictException);
+
+      expect(discussions.findOne).not.toHaveBeenCalled();
+      expect(mail.handover).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('SCRUM-31 messaging', () => {
+    const discussion = {
+  id: 1,
+  ownerId: 2,
+  announcement: {
+    id: 7,
+    title: 'Black phone',
+    authorId: 1,
+  },
+};
 
     beforeEach(() => {
       discussions.findOne.mockResolvedValue(discussion);
@@ -1028,6 +1127,46 @@ messages = {
           senderId: 2,
           content: 'I can collect the phone tomorrow.',
         });
+      });
+
+      it('notifies the finder when the claimant sends a message', async () => {
+        await service.sendMessage(1, 2, {
+          content: 'I can collect the phone tomorrow.',
+        });
+
+        expect(users.findOneBy).toHaveBeenCalledWith({ id: 1 });
+        expect(mail.newMessage).toHaveBeenCalledWith(
+          'elea@school.test',
+          {
+            announcementId: 7,
+            announcementTitle: 'Black phone',
+          },
+        );
+      });
+
+      it('notifies the claimant when the finder sends a message', async () => {
+        discussions.findOne.mockResolvedValue({
+          ...discussion,
+          ownerId: 2,
+        });
+
+        users.findOneBy.mockResolvedValue({
+          id: 2,
+          email: 'claimant@school.test',
+        });
+
+        await service.sendMessage(1, 1, {
+          content: 'I found your claim details correct.',
+        });
+
+        expect(users.findOneBy).toHaveBeenCalledWith({ id: 2 });
+        expect(mail.newMessage).toHaveBeenCalledWith(
+          'claimant@school.test',
+          {
+            announcementId: 7,
+            announcementTitle: 'Black phone',
+          },
+        );
       });
 
       it('rejects a user who is not a participant', async () => {
