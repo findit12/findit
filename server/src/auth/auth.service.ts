@@ -26,6 +26,33 @@ export class AuthService {
     private readonly mail: MailService,
   ) {}
 
+  async getProfile(userId: number) {
+    const user = await this.users.findOne({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        isVerified: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('Authentication required.');
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      isVerified: user.isVerified,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
+    };
+  }
+
   private hash(token: string): string {
     return createHash('sha256').update(token).digest('hex');
   }

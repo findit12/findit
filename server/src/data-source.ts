@@ -10,6 +10,7 @@ import { AnnouncementMatch } from './announcements/announcement-match.entity';
 import { SavedSearch } from './saved-searches/saved-search.entity';
 import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
+import { Report } from './reports/report.entity';
 
 // Used by the migration commands (npm run migration:run, npm run migration:check).
 export default new DataSource({
@@ -26,6 +27,7 @@ export default new DataSource({
   AnnouncementMatch,
   Message,
   Discussion,
+  Report,
 ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

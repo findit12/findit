@@ -1,7 +1,8 @@
-
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { CurrentUserId } from './current-user-id.decorator';
 import {
   CredentialsDto,
   EmailDto,
@@ -13,7 +14,17 @@ import {
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
+
+  @Get('me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get the authenticated user profile' })
+  @ApiResponse({ status: 200, description: 'Authenticated user profile' })
+  @ApiResponse({ status: 401, description: 'Authentication required' })
+  me(@CurrentUserId() userId: number) {
+    return this.authService.getProfile(userId);
+  }
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new account' })
@@ -72,5 +83,5 @@ export class AuthController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Sign out' })
   @ApiResponse({ status: 204, description: 'Signed out' })
-  logout(): void { }
+  logout(): void {}
 }

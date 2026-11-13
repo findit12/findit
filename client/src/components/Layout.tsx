@@ -1,10 +1,10 @@
-﻿import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
 
 // Frame shared by every page: the header, then the current page in <Outlet />.
 export default function Layout() {
-  const { token, signOut } = useAuth();
+  const { token, role, signOut } = useAuth();
   const navigate = useNavigate();
 
   async function logout() {
@@ -33,6 +33,11 @@ export default function Layout() {
             <Link className="link-button" to="/messages">
               Messages
             </Link>
+            {role === 'admin' && (
+              <Link className="link-button" to="/admin/reports">
+                Report moderation
+              </Link>
+            )}
             <button className="link-button" onClick={logout}>
               Sign out
             </button>
