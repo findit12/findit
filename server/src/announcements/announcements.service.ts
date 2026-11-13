@@ -336,13 +336,19 @@ export class AnnouncementsService {
     };
   }
 
-  // SCRUM-32: finder confirms that the item has been handed over.
+  // SCRUM-32: owner or finder confirms that the item has been returned.
   async returnItem(
     userId: number,
     announcementId: number,
     discussionId: number,
   ) {
-    const announcement = await this.findOwned(userId, announcementId);
+    const announcement = await this.announcements.findOne({
+      where: { id: announcementId },
+    });
+
+    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
+      throw new NotFoundException('Announcement not found.');
+    }
 
     if (announcement.type !== AnnouncementType.Found) {
       throw new BadRequestException(
@@ -365,22 +371,35 @@ export class AnnouncementsService {
       throw new NotFoundException('Discussion not found.');
     }
 
+    const isFinder = announcement.authorId === userId;
+    const isOwner = discussion.ownerId === userId;
+
+    if (!isFinder && !isOwner) {
+      throw new ForbiddenException('Only the owner or finder can confirm the handover.');
+    }
+
     announcement.status = AnnouncementStatus.Returned;
     announcement.returnedAt = new Date();
 
     await this.saveFields(announcement);
 
-    void this.mail
-      .handover(discussion.owner.email, {
+    const recipientEmail = isFinder
+      ? discussion.owner.email
+      : (await this.users.findOneBy({ id: announcement.authorId }))?.email;
+
+    if (recipientEmail) {
+      void this.mail
+      .handover(recipientEmail, {
         id: announcement.id,
         title: announcement.title,
-      })
+      }, isFinder ? 'finder' : 'owner')
       .catch((err) => {
         this.logger.error(
-          `Failed to notify claimant about handover for announcement ${announcement.id}`,
+          `Failed to notify the other participant about handover for announcement ${announcement.id}`,
           err,
         );
       });
+    }
 
     return {
       message: 'Handover confirmed successfully.',

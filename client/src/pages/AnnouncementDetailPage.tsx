@@ -1,4 +1,4 @@
-﻿
+
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
@@ -190,7 +190,6 @@ const canConfirmHandover =
   Boolean(token) &&
   announcement.type === 'found' &&
   announcement.status === 'Available' &&
-  announcement.authorId === userId &&
   Boolean(handoverDiscussion);
 
   const canStartDiscussion =

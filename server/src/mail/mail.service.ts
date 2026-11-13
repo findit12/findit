@@ -94,6 +94,7 @@ export class MailService {
       announcement.type === 'found'
         ? 'Your found object is published on FindIt'
         : 'Your lost object is published on FindIt';
+
     const intro = `Your announcement "${announcement.title}" is online. You can see it, edit it or delete it from its page.`;
     await this.send(to, subject, `${base}/announcements/${announcement.id}`, intro);
   }
@@ -102,6 +103,7 @@ export class MailService {
   async savedSearchAlert(to: string, announcement: ConfirmedAnnouncement): Promise<void> {
     const base = this.getClientBaseUrl();
     const kind = announcement.type === 'found' ? 'found object' : 'lost object';
+
     const intro = `A new ${kind} matches your saved search: "${announcement.title}".`;
     await this.send(
       to,
@@ -118,6 +120,7 @@ export class MailService {
   ): Promise<void> {
     const base = this.getClientBaseUrl();
 
+
     const intro = `Someone has started a discussion about your found object "${announcement.title}". Sign in to FindIt to review the claim.`;
 
     await this.send(
@@ -131,10 +134,13 @@ export class MailService {
   async handover(
     to: string,
     announcement: { id: number; title: string },
+    confirmedBy: 'finder' | 'owner' = 'finder',
   ): Promise<void> {
     const base = this.getClientBaseUrl();
 
-    const intro = `The finder has confirmed the handover of "${announcement.title}". The item has been marked as returned.`;
+    const confirmer = confirmedBy === 'finder' ? 'finder' : 'owner';
+
+    const intro = `The ${confirmer} has confirmed the handover of "${announcement.title}". The item has been marked as returned.`;
 
     await this.send(
       to,

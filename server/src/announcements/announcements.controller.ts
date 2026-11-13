@@ -184,13 +184,13 @@ export class AnnouncementsController {
     return this.service.startDiscussion(id, userId, dto);
   }
 
-  // SCRUM-32: finder confirms that the item has been handed over.
+  // SCRUM-32: owner or finder confirms that the item has been returned.
   @Post(':id/discussions/:discussionId/return')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Confirm handover of a found object to a claimant' })
+  @ApiOperation({ summary: 'Confirm return of a found object' })
   @ApiResponse({ status: 201, description: 'Handover confirmed' })
-  @ApiResponse({ status: 403, description: 'Only the finder can confirm the handover' })
+  @ApiResponse({ status: 403, description: 'Only the owner or finder can confirm the handover' })
   @ApiResponse({ status: 404, description: 'Announcement or discussion not found' })
   @ApiResponse({ status: 409, description: 'Announcement is no longer available' })
   returnItem(

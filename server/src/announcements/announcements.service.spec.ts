@@ -1016,8 +1016,10 @@ messages = {
     };
 
     beforeEach(() => {
-      announcements.findOne.mockResolvedValue(announcement);
-      discussions.findOne.mockResolvedValue(discussion);
+      announcement.status = AnnouncementStatus.Available;
+      announcement.returnedAt = null;
+      announcements.findOne.mockResolvedValue({ ...announcement });
+      discussions.findOne.mockResolvedValue({ ...discussion });
     });
 
     it('allows the finder to confirm handover and notifies the claimant', async () => {
@@ -1041,14 +1043,36 @@ messages = {
           id: 7,
           title: 'Black phone',
         },
+        'finder',
       );
 
       expect(result.status).toBe(AnnouncementStatus.Returned);
     });
 
-    it('does not allow another user to confirm handover', async () => {
+    it('allows the claimant to confirm handover and notifies the finder', async () => {
+      const result = await service.returnItem(2, 7, 1);
+
+      expect(users.findOneBy).toHaveBeenCalledWith({ id: 1 });
+      expect(mail.handover).toHaveBeenCalledWith(
+        'elea@school.test',
+        {
+          id: 7,
+          title: 'Black phone',
+        },
+        'owner',
+      );
+      expect(announcements.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: AnnouncementStatus.Returned,
+          returnedAt: expect.any(Date),
+        }),
+      );
+      expect(result.status).toBe(AnnouncementStatus.Returned);
+    });
+
+    it('does not allow an unrelated user to confirm handover', async () => {
       await expect(
-        service.returnItem(2, 7, 1),
+        service.returnItem(3, 7, 1),
       ).rejects.toThrow(ForbiddenException);
 
       expect(announcements.save).not.toHaveBeenCalled();
