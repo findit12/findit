@@ -10,6 +10,7 @@ import EditAnnouncementPage from './pages/EditAnnouncementPage';
 import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 import MySavedSearchesPage from './pages/MySavedSearchesPage';
 import MessagesPage from './pages/MessagesPage';
+import AdminReportsPage from './pages/AdminReportsPage';
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -64,6 +65,15 @@ export default function App() {
           element={
             <RequireAuth>
               <MySavedSearchesPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/admin/reports"
+          element={
+            <RequireAuth>
+              <AdminReportsPage />
             </RequireAuth>
           }
         />

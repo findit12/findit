@@ -17,6 +17,8 @@ import { SavedSearch } from './saved-searches/saved-search.entity';
 import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
+import { Report } from './reports/report.entity';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { Message } from './discussions/message.entity';
   SavedSearch,
   AnnouncementMatch,
   Discussion,
+  Report,
 ],
       synchronize: false,
     }),
@@ -44,6 +47,7 @@ import { Message } from './discussions/message.entity';
     ReferenceModule,
     AnnouncementsModule,
     SavedSearchesModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

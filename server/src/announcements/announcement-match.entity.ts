@@ -12,8 +12,8 @@ import { Announcement } from './announcement.entity';
 
 @Entity('announcement_matches')
 @Unique('UQ_announcement_matches_pair', ['announcementId', 'matchedAnnouncementId'])
-@Check('"announcement_id" < "matched_announcement_id"')
-@Check('"score" >= 0 AND "score" <= 100')
+@Check('CHK_announcement_matches_order', '"announcement_id" < "matched_announcement_id"')
+@Check('CHK_announcement_matches_score', '"score" >= 0 AND "score" <= 100')
 export class AnnouncementMatch {
   @PrimaryGeneratedColumn()
   id!: number;

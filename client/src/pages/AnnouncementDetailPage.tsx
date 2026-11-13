@@ -34,6 +34,10 @@ export default function AnnouncementDetailPage() {
   const [discussionError, setDiscussionError] = useState('');
   const [discussionNotice, setDiscussionNotice] = useState('');
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportError, setReportError] = useState('');
+  const [reportNotice, setReportNotice] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
 
   useEffect(() => {
   apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
@@ -167,6 +171,34 @@ async function confirmHandover() {
       setDiscussionError((err as Error).message);
     } finally {
       setSubmittingDiscussion(false);
+    }
+  }
+
+  async function submitReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const reason = reportReason.trim();
+    if (!announcement || !token || !reason) {
+      setReportError('Please enter a reason for reporting this announcement.');
+      return;
+    }
+
+    setReportError('');
+    setReportNotice('');
+    setSubmittingReport(true);
+
+    try {
+      await apiRequest(`/announcements/${announcement.id}/reports`, {
+        method: 'POST',
+        token,
+        body: { reason },
+      });
+      setReportReason('');
+      setReportNotice('Report submitted successfully for administrator review.');
+    } catch (err) {
+      setReportError((err as Error).message);
+    } finally {
+      setSubmittingReport(false);
     }
   }
 
@@ -368,6 +400,50 @@ const canConfirmHandover =
               {submittingDiscussion
                 ? 'Submitting...'
                 : 'Start discussion'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {token && (
+        <div className="discussion-section">
+          <h2>Report this announcement</h2>
+
+          <p>
+            Let the administrators know why this announcement should be reviewed.
+          </p>
+
+          {reportNotice && (
+            <p className="notice success" role="status">
+              {reportNotice}
+            </p>
+          )}
+
+          {reportError && (
+            <p className="notice error" role="alert">
+              {reportError}
+            </p>
+          )}
+
+          <form onSubmit={submitReport}>
+            <label htmlFor="reportReason">Reason for report</label>
+
+            <textarea
+              id="reportReason"
+              value={reportReason}
+              onChange={(event) => setReportReason(event.target.value)}
+              placeholder="Explain why you are reporting this announcement..."
+              maxLength={1000}
+              rows={4}
+              required
+            />
+
+            <button
+              className="primary"
+              type="submit"
+              disabled={submittingReport || !reportReason.trim()}
+            >
+              {submittingReport ? 'Submitting...' : 'Submit report'}
             </button>
           </form>
         </div>
