@@ -21,6 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { AdminGuard } from '../auth/admin.guard';
 import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
@@ -62,6 +63,18 @@ export class AnnouncementsController {
   @ApiResponse({ status: 400, description: 'Invalid page or limit' })
   findAll(@Query() query: ListAnnouncementsQueryDto) {
     return this.service.findPublicPage(query);
+  }
+
+  // SCRUM-36: Admin recovery statistics (placed before ":id" so "admin" is not parsed as an id).
+  @Get('admin/statistics')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get platform recovery statistics for administrators' })
+  @ApiResponse({ status: 200, description: 'Declared count, returned count, recovery rate, and average return time' })
+  @ApiResponse({ status: 401, description: 'Authentication required' })
+  @ApiResponse({ status: 403, description: 'Administrator access required' })
+  getAdminStatistics() {
+    return this.service.getAdminStatistics();
   }
 
   // The "mine" routes are written before ":id", otherwise "mine" would be read as an id.

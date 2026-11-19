@@ -1423,5 +1423,54 @@ messages = {
         expect(messages.count).not.toHaveBeenCalled();
       });
     });
+    describe('getAdminStatistics (SCRUM-36)', () => {
+      it('returns zeroed metrics and null average return time when no announcements exist', async () => {
+        announcements.find.mockResolvedValue([]);
+        const stats = await service.getAdminStatistics();
+        expect(stats).toEqual({
+          declaredCount: 0,
+          returnedCount: 0,
+          recoveryRate: 0,
+          averageReturnTimeHours: null,
+          averageReturnTimeDays: null,
+          breakdown: {
+            foundDeclared: 0,
+            lostDeclared: 0,
+            foundReturned: 0,
+            lostReturned: 0,
+            activeCount: 0,
+            closedCount: 0,
+            archivedCount: 0,
+            hiddenCount: 0,
+          },
+        });
+      });
+
+      it('computes declared counts, recovery rate, average return time, and status breakdown', async () => {
+        announcements.find.mockResolvedValue([
+          { id: 1, type: AnnouncementType.Found, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-02T00:00:00Z') },
+          { id: 2, type: AnnouncementType.Lost, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-04T00:00:00Z') },
+          { id: 3, type: AnnouncementType.Found, status: AnnouncementStatus.Available, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+          { id: 4, type: AnnouncementType.Lost, status: AnnouncementStatus.Closed, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+          { id: 5, type: AnnouncementType.Found, status: AnnouncementStatus.Deleted, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+        ]);
+        const stats = await service.getAdminStatistics();
+        expect(stats.declaredCount).toBe(4);
+        expect(stats.returnedCount).toBe(2);
+        expect(stats.recoveryRate).toBe(50);
+        expect(stats.averageReturnTimeHours).toBe(48);
+        expect(stats.averageReturnTimeDays).toBe(2);
+        expect(stats.breakdown).toEqual({
+          foundDeclared: 2,
+          lostDeclared: 2,
+          foundReturned: 1,
+          lostReturned: 1,
+          activeCount: 1,
+          closedCount: 1,
+          archivedCount: 0,
+          hiddenCount: 0,
+        });
+      });
+    });
   });
 });

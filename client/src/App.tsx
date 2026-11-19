@@ -11,6 +11,7 @@ import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 import MySavedSearchesPage from './pages/MySavedSearchesPage';
 import MessagesPage from './pages/MessagesPage';
 import AdminReportsPage from './pages/AdminReportsPage';
+import AdminStatsPage from './pages/AdminStatsPage';
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -70,7 +71,8 @@ export default function App() {
         />
 
         <Route
-          path="/admin/reports"
+          path="/admin/statistics" element={<RequireAuth><AdminStatsPage /></RequireAuth>} />
+        <Route path="/admin/reports"
           element={
             <RequireAuth>
               <AdminReportsPage />
