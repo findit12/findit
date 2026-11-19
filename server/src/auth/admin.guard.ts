@@ -25,7 +25,7 @@ export class AdminGuard implements CanActivate {
       throw new UnauthorizedException('Authentication required.');
     }
 
-    const user = await this.users.findOne({ where: { id: userId } });
+    const user = request.user ?? (await this.users.findOne({ where: { id: userId } }));
 
     if (!user) {
       throw new NotFoundException('User not found.');

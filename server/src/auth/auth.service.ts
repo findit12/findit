@@ -10,7 +10,7 @@ import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
-import { User } from '../users/user.entity';
+import { User, UserStatus } from '../users/user.entity';
 import { AuthToken, AuthTokenType } from './auth-token.entity';
 import { MailService } from '../mail/mail.service';
 import { CredentialsDto } from './auth.dto';
@@ -186,6 +186,10 @@ export class AuthService {
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    if (user.status === UserStatus.Suspended) {
+      throw new UnauthorizedException('Account is suspended.');
     }
 
     // Refuse login for unverified accounts with clear message and unverified flag (Point B1)
