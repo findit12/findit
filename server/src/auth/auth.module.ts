@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AdminGuard } from './admin.guard';
+import { JwtAuthGuard } from './jwt-auth.guard';
 import { User } from '../users/user.entity';
 import { AuthToken } from './auth-token.entity';
 import { MailModule } from '../mail/mail.module';
@@ -23,7 +24,7 @@ import { MailModule } from '../mail/mail.module';
     MailModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, AdminGuard],
-  exports: [AuthService, JwtModule, AdminGuard],
+  providers: [AuthService, JwtAuthGuard, AdminGuard],
+  exports: [AuthService, JwtModule, TypeOrmModule, JwtAuthGuard, AdminGuard],
 })
 export class AuthModule {}

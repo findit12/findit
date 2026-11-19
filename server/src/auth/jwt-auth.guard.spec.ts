@@ -1,8 +1,9 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Repository } from 'typeorm';
+import { User, UserStatus } from '../users/user.entity';
 import { AuthenticatedRequest, JwtAuthGuard } from './jwt-auth.guard';
 
-// Builds the minimal NestJS context the guard needs, around a fake request.
 function contextFor(request: AuthenticatedRequest): ExecutionContext {
   return {
     switchToHttp: () => ({ getRequest: () => request }),
@@ -11,34 +12,47 @@ function contextFor(request: AuthenticatedRequest): ExecutionContext {
 
 describe('JwtAuthGuard', () => {
   const jwt = { verify: jest.fn() };
-  const guard = new JwtAuthGuard(jwt as unknown as JwtService);
+  const users = { findOne: jest.fn() };
+  const guard = new JwtAuthGuard(
+    jwt as unknown as JwtService,
+    users as unknown as Repository<User>,
+  );
 
   afterEach(() => jest.resetAllMocks());
 
-  it('refuses a request without Authorization header', () => {
-    expect(() => guard.canActivate(contextFor({ headers: {} }))).toThrow(UnauthorizedException);
+  it('refuses a request without Authorization header', async () => {
+    await expect(guard.canActivate(contextFor({ headers: {} }))).rejects.toThrow(UnauthorizedException);
   });
 
-  it('refuses a header that is not "Bearer <token>"', () => {
-    expect(() => guard.canActivate(contextFor({ headers: { authorization: 'Basic abc' } }))).toThrow(
+  it('refuses a header that is not "Bearer <token>"', async () => {
+    await expect(guard.canActivate(contextFor({ headers: {authorization: 'Basic abc' } }))).rejects.toThrow(
       UnauthorizedException,
     );
   });
 
-  it('refuses an invalid or expired token', () => {
+  it('refuses an invalid or expired token', async () => {
     jwt.verify.mockImplementation(() => {
       throw new Error('jwt expired');
     });
-    expect(() => guard.canActivate(contextFor({ headers: { authorization: 'Bearer bad' } }))).toThrow(
+    await expect(guard.canActivate(contextFor({ headers: {authorization: 'Bearer bad' } }))).rejects.toThrow(
       UnauthorizedException,
     );
   });
 
-  it('accepts a valid token and stores the user id in the request', () => {
+  it('accepts a valid token for an active user and stores the user id in the request', async () => {
     jwt.verify.mockReturnValue({ sub: '12' });
+    users.findOne.mockResolvedValue({ id: 12, status: UserStatus.Active });
     const request: AuthenticatedRequest = { headers: { authorization: 'Bearer good' } };
 
-    expect(guard.canActivate(contextFor(request))).toBe(true);
-    expect(request.userId).toBe(12);
+    await expect(guard.canActivate(contextFor(request))).resolves.toBe(true);
+    expect(request.userId) .toBe(12);
+  });
+
+  it('refuses a valid token when the user account is suspended', async () => {
+    jwt.verify.mockReturnValue({ sub: '12' });
+    users.findOne.mockResolvedValue({ id: 12, status: UserStatus.Suspended });
+    const request: AuthenticatedRequest = { headers: {authorization: 'Bearer good' } };
+
+    await expect(guard.canActivate(contextFor(request))).rejects.toThrow(UnauthorizedException);
   });
 });

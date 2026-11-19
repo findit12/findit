@@ -27,6 +27,8 @@ export default function AdminReportsPage() {
   const { token, signOut } = useAuth();
   const [reports, setReports] = useState<Report[] | null>(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [busyId, setBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -46,6 +48,41 @@ export default function AdminReportsPage() {
     };
   }, [token, signOut]);
 
+  async function handleAction(
+    report: Report,
+    path: string,
+    method: 'PATCH' | 'DELETE',
+    confirmText: string,
+    successText: string,
+    removeByAnnouncement = true,
+  ) {
+    if (!window.confirm(confirmText)) return;
+
+    setError('');
+    setSuccess('');
+    setBusyId(report.id);
+
+    try {
+      await apiRequest(path, { method, token });
+      setReports((current) =>
+        current
+          ? current.filter((item) =>
+              removeByAnnouncement
+                ? item.announcement.id !== report.announcement.id
+                : item.id !== report.id,
+            )
+          : current,
+      );
+      setSuccess(successText);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      if (apiErr.status === 401) signOut();
+      setError(apiErr.message || 'Moderation action failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <section className="card wide-card">
       <h1>Report moderation</h1>
@@ -57,6 +94,12 @@ export default function AdminReportsPage() {
       {error && (
         <p className="notice error" role="alert">
           {error}
+        </p>
+      )}
+
+      {success && (
+        <p className="notice success" role="status">
+          {success}
         </p>
       )}
 
@@ -89,7 +132,7 @@ export default function AdminReportsPage() {
                   {report.announcement.title}
                 </Link>
                 <small>
-                  {report.announcement.type} · {report.announcement.status}
+                  {report.announcement.type} ´ {report.announcement.status} · Author #{report.announcement.authorId}
                 </small>
 
                 <h3>Reported by</h3>
@@ -103,14 +146,85 @@ export default function AdminReportsPage() {
                     Submitted: {new Date(report.createdAt).toLocaleString()}
                   </small>
                 </p>
+
+                <div className="owner-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busyId === report.id}
+                    onClick={() =>
+                      handleAction(
+                        report,
+                        `/reports/admin/announcements/${report.announcement.id}/hide` ,
+                        'PATCH',
+                        'Hide this announcement from public views?',
+                        'Announcement hidden.',
+                      )
+                    }
+                  >
+                    Hide announcement
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary danger"
+                    disabled={busyId === report.id}
+                    onClick={() =>
+                      handleAction(
+                        report,
+                        `/reports/admin/announcements/${report.announcement.id}`,
+                        'DELETE',
+                        'Permanently remove this announcement from the platform?',
+                        'Announcement deleted.',
+                      )
+                    }
+                  >
+                    Delete announcement
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary danger"
+                    disabled={busyId === report.id}
+                    onClick={() =>
+                      handleAction(
+                        report,
+                        `/reports/admin/users/${report.announcement.authorId}/block`,
+                        'PATCH',
+                        'Block the author of this announcement and revoke their session?',
+                        'User account blocked.',
+                        false,
+                      )
+                    }
+                  >
+                    Block user
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busyId === report.id}
+                    onClick={() =>
+                      handleAction(
+                        report,
+                        `/reports/admin/${report.id}` ,
+                        'DELETE',
+                        'Dismiss this report?',
+                        'Report dismissed.',
+                        false,
+                      )
+                    }
+                  >
+                    Dismiss report
+                  </button>
+                </div>
               </div>
             </li>
           ))}
         </ul>
       )}
-
       <p>
-        <Link className="link-button" to="/gallery">
+        <Link className="secondary button-link" to="/gallery">
           Back to gallery
         </Link>
       </p>
