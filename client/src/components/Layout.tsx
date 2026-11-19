@@ -34,9 +34,8 @@ export default function Layout() {
               Messages
             </Link>
             {role === 'admin' && (
-              <Link className="link-button" to="/admin/reports">
-                Report moderation
-              </Link>
+              <><Link className="link-button" to="/admin/statistics">Statistics</Link><Link className="link-button" to="/admin/reports">
+                Report moderation</Link></>
             )}
             <button className="link-button" onClick={logout}>
               Sign out

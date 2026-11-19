@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { User } from '../users/user.entity';
 import { AnnouncementType } from './announcement.entity';
 import { CreateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsController } from './announcements.controller';
@@ -7,7 +9,7 @@ import { AnnouncementsService } from './announcements.service';
 
 describe('AnnouncementsController', () => {
   let controller: AnnouncementsController;
-  let service: Record<'create' | 'findPublic' | 'findMine' | 'findMineById' | 'update' | 'remove', jest.Mock>;
+  let service: Record<'create' | 'findPublic' | 'findMine' | 'findMineById' | 'update' | 'remove' | 'getAdminStatistics', jest.Mock>;
 
   beforeEach(async () => {
     service = {
@@ -17,13 +19,15 @@ describe('AnnouncementsController', () => {
       findMineById: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      getAdminStatistics: jest.fn().mockResolvedValue({ declaredCount: 10, returnedCount: 4, recoveryRate: 40 }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AnnouncementsController],
       providers: [
         { provide: AnnouncementsService, useValue: service },
-        { provide: JwtService, useValue: { verify: jest.fn() } }, // needed by JwtAuthGuard
+        { provide: JwtService, useValue: { verify: jest.fn() } },
+        { provide: getRepositoryToken(User), useValue: { findOne: jest.fn() } },
       ],
     }).compile();
 
@@ -54,5 +58,11 @@ describe('AnnouncementsController', () => {
     expect(service.findMineById).toHaveBeenCalledWith(5, 1);
     expect(service.update).toHaveBeenCalledWith(5, 1, { title: 'New title' });
     expect(service.remove).toHaveBeenCalledWith(5, 1);
+  });
+
+  it('returns platform recovery statistics for administrators (SCRUM-36)', async () => {
+    const res = await controller.getAdminStatistics();
+    expect(service.getAdminStatistics).toHaveBeenCalled();
+    expect(res).toEqual({ declaredCount: 10, returnedCount: 4, recoveryRate: 40 });
   });
 });

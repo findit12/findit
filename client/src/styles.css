@@ -1100,3 +1100,9 @@ main:has(.messages-layout) {
     max-width: 90%;
   }
 }
+/* SCRUM-36: Admin recovery statistics grid */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:18px 0 24px}
+.stat-card{display:flex;flex-direction:column;gap:6px;padding:16px 18px;border:1px solid var(--rose-ligne);border-radius:16px;background:var(--rose-champ)}
+.stat-label{font-size:.84rem;font-weight:600;color:var(--muted)}
+.stat-value{font-family:var(--font-display);font-size:1.75rem;font-weight:800;color:var(--framboise);line-height:1.15}
+.stat-card small{margin:0;color:var(--muted);font-size:.8rem}

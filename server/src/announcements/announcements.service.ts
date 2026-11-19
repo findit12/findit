@@ -901,6 +901,60 @@ export class AnnouncementsService {
     await this.announcements.save(columns);
   }
 
+  // SCRUM-36: Platform-wide recovery metrics for the admin statistics dashboard.
+  async getAdminStatistics() {
+    const all = await this.announcements.find({
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        createdAt: true,
+        returnedAt: true,
+      },
+    });
+
+    const declared = all.filter((a) => a.status !== AnnouncementStatus.Deleted);
+    const declaredCount = declared.length;
+    const returned = declared.filter((a) => a.status === AnnouncementStatus.Returned);
+    const returnedCount = returned.length;
+    const recoveryRate =
+      declaredCount === 0
+        ? 0
+        : Math.round((returnedCount / declaredCount) * 1000) / 10;
+
+    const durationsMs = returned
+      .filter((a) => a.returnedAt !== null)
+      .map((a) => new Date(a.returnedAt!).getTime() - new Date(a.createdAt).getTime())
+      .filter((ms) => ms >= 0);
+
+    let averageReturnTimeHours: number | null = null;
+    let averageReturnTimeDays: number | null = null;
+    if (durationsMs.length > 0) {
+      const avgMs = durationsMs.reduce((sum, ms) => sum + ms, 0) / durationsMs.length;
+      const hours = avgMs / (1000 * 60 * 60);
+      averageReturnTimeHours = Math.round(hours * 10) / 10;
+      averageReturnTimeDays = Math.round((hours / 24) * 10) / 10;
+    }
+
+    return {
+      declaredCount,
+      returnedCount,
+      recoveryRate,
+      averageReturnTimeHours,
+      averageReturnTimeDays,
+      breakdown: {
+        foundDeclared: declared.filter((a) => a.type === AnnouncementType.Found).length,
+        lostDeclared: declared.filter((a) => a.type === AnnouncementType.Lost).length,
+        foundReturned: returned.filter((a) => a.type === AnnouncementType.Found).length,
+        lostReturned: returned.filter((a) => a.type === AnnouncementType.Lost).length,
+        activeCount: declared.filter((a) => a.status === AnnouncementStatus.Available || a.status === AnnouncementStatus.Open).length,
+        closedCount: declared.filter((a) => a.status === AnnouncementStatus.Closed).length,
+        archivedCount: declared.filter((a) => a.status === AnnouncementStatus.Archived).length,
+        hiddenCount: declared.filter((a) => a.status === AnnouncementStatus.Hidden).length,
+      },
+    };
+  }
+
   private async findWithDetails(id: number): Promise<Announcement> {
     return this.announcements.findOneOrFail({
       where: { id },
