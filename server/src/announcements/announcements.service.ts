@@ -37,6 +37,7 @@ import {
 } from './announcements-query.dto';
 import {
   CreateAnnouncementDto,
+  ReplaceAnnouncementDto,
   UpdateAnnouncementDto,
 } from './announcements.dto';
 import { checkPhotos } from './photo-rules';
@@ -837,6 +838,22 @@ export class AnnouncementsService {
         await this.findWithDetails(id),
       ),
     };
+  }
+
+  // Lab 6: PUT = full replacement. The missing optional fields are emptied, then the normal
+  // update rules apply (author only, editable status, date, reference data, hidden detail).
+  async replace(
+    userId: number,
+    id: number,
+    dto: ReplaceAnnouncementDto,
+  ) {
+    return this.update(userId, id, {
+      ...dto,
+      brand: dto.brand ?? '',
+      color: dto.color ?? '',
+      placeDetails: dto.placeDetails ?? '',
+      hiddenDetail: dto.hiddenDetail ?? '',
+    });
   }
 
   // SCRUM-18: logical deletion.

@@ -9,7 +9,7 @@ import { AnnouncementsService } from './announcements.service';
 
 describe('AnnouncementsController', () => {
   let controller: AnnouncementsController;
-  let service: Record<'create' | 'findPublic' | 'findMine' | 'findMineById' | 'update' | 'remove' | 'getAdminStatistics', jest.Mock>;
+  let service: Record<'create' | 'findPublic' | 'findMine' | 'findMineById' | 'update' | 'replace' | 'remove' | 'getAdminStatistics', jest.Mock>;
 
   beforeEach(async () => {
     service = {
@@ -18,6 +18,7 @@ describe('AnnouncementsController', () => {
       findMine: jest.fn(),
       findMineById: jest.fn(),
       update: jest.fn(),
+      replace: jest.fn(),
       remove: jest.fn(),
       getAdminStatistics: jest.fn().mockResolvedValue({ declaredCount: 10, returnedCount: 4, recoveryRate: 40 }),
     };
@@ -58,6 +59,21 @@ describe('AnnouncementsController', () => {
     expect(service.findMineById).toHaveBeenCalledWith(5, 1);
     expect(service.update).toHaveBeenCalledWith(5, 1, { title: 'New title' });
     expect(service.remove).toHaveBeenCalledWith(5, 1);
+  });
+
+  it('passes the signed-in user, the id and the full form to the PUT route (Lab 6)', async () => {
+    const dto = {
+      title: 'Black iPhone 13',
+      categoryId: 1,
+      objectTypeId: 2,
+      description: 'Found under a table',
+      eventDate: '2026-10-01',
+      placeId: 3,
+    };
+
+    await controller.replace(5, 1, dto);
+
+    expect(service.replace).toHaveBeenCalledWith(5, 1, dto);
   });
 
   it('returns platform recovery statistics for administrators (SCRUM-36)', async () => {

@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Put,
   Query,
   UploadedFiles,
   UseGuards,
@@ -24,7 +25,11 @@ import {
 import { AdminGuard } from '../auth/admin.guard';
 import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { CreateAnnouncementDto, UpdateAnnouncementDto } from './announcements.dto';
+import {
+  CreateAnnouncementDto,
+  ReplaceAnnouncementDto,
+  UpdateAnnouncementDto,
+} from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 import { ListAnnouncementsQueryDto } from './announcements-query.dto';
 import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
@@ -164,6 +169,24 @@ export class AnnouncementsController {
     @Body() dto: UpdateAnnouncementDto,
   ) {
     return this.service.update(userId, id, dto);
+  }
+
+  // Lab 6: full update (PUT). PATCH above changes only the fields that are sent.
+  @Put(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Replace the editable fields of my announcement (author only)' })
+  @ApiResponse({ status: 200, description: 'Announcement replaced' })
+  @ApiResponse({ status: 400, description: 'Missing or invalid field' })
+  @ApiResponse({ status: 403, description: 'Not the author' })
+  @ApiResponse({ status: 404, description: 'Announcement not found' })
+  @ApiResponse({ status: 409, description: 'The announcement can no longer be changed' })
+  replace(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ReplaceAnnouncementDto,
+  ) {
+    return this.service.replace(userId, id, dto);
   }
 
   @Delete(':id')

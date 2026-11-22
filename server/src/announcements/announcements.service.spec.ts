@@ -780,6 +780,59 @@ messages = {
     });
   });
 
+  describe('replace (Lab 6, PUT)', () => {
+    const fullForm = {
+      title: 'Black iPhone 13',
+      categoryId: 1,
+      objectTypeId: 2,
+      description: 'Found under a table in room B204',
+      eventDate: '2026-10-01',
+      placeId: 3,
+      hiddenDetail: 'Cat sticker on the back',
+    };
+
+    it('replaces every field and empties the optional ones that are missing', async () => {
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ brand: 'Apple', color: 'Black', placeDetails: 'Second floor' }),
+      );
+
+      await service.replace(1, 7, fullForm);
+
+      const saved = announcements.save.mock.calls[0][0];
+
+      expect(saved.title).toBe('Black iPhone 13');
+      expect(saved.description).toBe('Found under a table in room B204');
+      expect(saved.brand).toBeNull();
+      expect(saved.color).toBeNull();
+      expect(saved.placeDetails).toBeNull();
+      expect(reference.checkSelection).toHaveBeenCalledWith(1, 2, 3);
+    });
+
+    it('refuses a found announcement without hidden detail (400)', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+
+      await expect(
+        service.replace(1, 7, { ...fullForm, hiddenDetail: undefined }),
+      ).rejects.toThrow(BadRequestException);
+      expect(announcements.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses someone else's announcement (403) and a final one (409)", async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement({ authorId: 2 }));
+      await expect(service.replace(1, 7, fullForm)).rejects.toThrow(ForbiddenException);
+
+      announcements.findOne.mockResolvedValue(
+        storedAnnouncement({ status: AnnouncementStatus.Returned }),
+      );
+      await expect(service.replace(1, 7, fullForm)).rejects.toThrow(ConflictException);
+    });
+
+    it('refuses an unknown announcement (404)', async () => {
+      announcements.findOne.mockResolvedValue(null);
+      await expect(service.replace(1, 99, fullForm)).rejects.toThrow(NotFoundException);
+    });
+  });
+
   describe('remove (SCRUM-18)', () => {
     it('sets the status to Deleted instead of erasing the row', async () => {
       announcements.findOne.mockResolvedValue(storedAnnouncement());
