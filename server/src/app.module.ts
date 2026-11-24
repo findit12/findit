@@ -19,6 +19,7 @@ import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
 import { Report } from './reports/report.entity';
 import { AuditLog } from './reports/audit-log.entity';
+import { Claim } from './reception/claim.entity';
 import { ReportsModule } from './reports/reports.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 import { LimitsModule } from './limits/limits.module';
@@ -46,6 +47,7 @@ import { ReceptionModule } from './reception/reception.module';
   Discussion,
   Report,
   AuditLog,
+  Claim,
 ],
       synchronize: false,
     }),

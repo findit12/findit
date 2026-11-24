@@ -136,6 +136,23 @@ describe('MailService', () => {
     expect(html).toContain('http://localhost:5173/announcements/8');
   });
 
+  it('writes the handover and declined-claim emails of the reception (SCRUM-53)', async () => {
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const newest = async () => readFile(path.join(dir, (await readdir(dir)).sort().reverse()[0]), 'utf8');
+
+    await service.receptionHandover('a@school.edu', { id: 8, title: 'Black phone' });
+    const handover = await newest();
+    expect(handover).toContain('Your FindIt item handover is confirmed');
+    expect(handover).toContain('reception staff confirmed the handover');
+    expect(handover).toContain('http://localhost:5173/announcements/8');
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await service.claimDeclined('a@school.edu', { id: 8, title: 'Black phone' });
+    const declined = await newest();
+    expect(declined).toContain('Your FindIt claim was declined');
+    expect(declined).toContain('http://localhost:5173/announcements/8');
+  });
+
   it('writes a new-discussion email that links to the discussion (SCRUM-30)', async () => {
     await service.discussionStarted('finder@school.edu', { id: 7, title: 'Black phone', type: 'found' }, 3);
 

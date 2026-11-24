@@ -150,6 +150,28 @@ export class MailService {
     );
   }
 
+  // FR-16: the reception staff confirmed the handover (sent to the finder and to the claimant).
+  async receptionHandover(to: string, announcement: { id: number; title: string }): Promise<void> {
+    const base = this.getClientBaseUrl();
+    await this.send(
+      to,
+      'Your FindIt item handover is confirmed',
+      `${base}/announcements/${announcement.id}`,
+      `The reception staff confirmed the handover of "${announcement.title}". The item has been marked as returned.`,
+    );
+  }
+
+  // FR-16: the proof does not match the hidden detail.
+  async claimDeclined(to: string, announcement: { id: number; title: string }): Promise<void> {
+    const base = this.getClientBaseUrl();
+    await this.send(
+      to,
+      'Your FindIt claim was declined',
+      `${base}/announcements/${announcement.id}`,
+      `The reception staff declined your claim on "${announcement.title}": your proof does not match. The object stays available, you can ask the reception for help.`,
+    );
+  }
+
   async handover(
     to: string,
     announcement: { id: number; title: string },

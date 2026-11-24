@@ -18,6 +18,7 @@ import MessagesPage from './pages/MessagesPage';
 const AdminReportsPage = lazy(() => import('./pages/AdminReportsPage'));
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
 const AdminStatsPage = lazy(() => import('./pages/AdminStatsPage'));
+const AdminClaimsPage = lazy(() => import('./pages/AdminClaimsPage'));
 
 // FR-19: signed in, administrator, then the page once its code is loaded.
 function AdminRoute({ children }: { children: ReactNode }) {
@@ -108,6 +109,15 @@ export default function App() {
           element={
             <AdminRoute>
               <AdminUsersPage />
+            </AdminRoute>
+          }
+        />
+
+        <Route
+          path="/admin/claims"
+          element={
+            <AdminRoute>
+              <AdminClaimsPage />
             </AdminRoute>
           }
         />

@@ -12,6 +12,7 @@ import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
 import { Report } from './reports/report.entity';
 import { AuditLog } from './reports/audit-log.entity';
+import { Claim } from './reception/claim.entity';
 
 // Used by the migration commands (npm run migration:run, npm run migration:check).
 export default new DataSource({
@@ -30,6 +31,7 @@ export default new DataSource({
   Discussion,
   Report,
   AuditLog,
+  Claim,
 ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,

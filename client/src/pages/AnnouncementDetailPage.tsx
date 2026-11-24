@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
 import { Announcement, AnnouncementMatchesResponse, isClosable, isEditable } from '../types/announcement';
+import type { Claim } from '../types/claim';
 import type { DiscussionsResponse } from '../types/discussion';
 import { useAuth } from '../auth/AuthContext';
 import AnnouncementCard from '../components/AnnouncementCard';
@@ -28,6 +29,11 @@ export default function AnnouncementDetailPage() {
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
   // FR-14: the finder drops the object at the reception.
   const [dropping, setDropping] = useState(false);
+  // FR-16: my claim on this object, and the proof of a new one.
+  const [myClaim, setMyClaim] = useState<Claim | null>(null);
+  const [claimProof, setClaimProof] = useState('');
+  const [claimError, setClaimError] = useState('');
+  const [submittingClaim, setSubmittingClaim] = useState(false);
   // FR-18: report the announcement.
   const [reportReason, setReportReason] = useState('');
   const [reportError, setReportError] = useState('');
@@ -58,6 +64,17 @@ export default function AnnouncementDetailPage() {
       .catch(() => setMyDiscussionId(null));
   }, [id, token]);
 
+  // Only a signed-in user has claims.
+  useEffect(() => {
+    if (!token) {
+      setMyClaim(null);
+      return;
+    }
+    apiRequest<{ claims: Claim[] }>('/claims', { token })
+      .then((data) => setMyClaim(data.claims.find((claim) => claim.announcementId === Number(id)) ?? null))
+      .catch(() => setMyClaim(null));
+  }, [id, token]);
+
   // FR-14: irreversible. The open discussions are closed and their owners are notified.
   async function dropOff() {
     if (
@@ -75,6 +92,27 @@ export default function AnnouncementDetailPage() {
       setError((err as Error).message);
     } finally {
       setDropping(false);
+    }
+  }
+
+  // FR-16: "Claim at reception", with the proof.
+  async function submitClaim(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!announcement) return;
+    setClaimError('');
+    setSubmittingClaim(true);
+    try {
+      const data = await apiRequest<{ claim: Claim }>(`/announcements/${announcement.id}/claims`, {
+        method: 'POST',
+        token,
+        body: { proof: claimProof },
+      });
+      setMyClaim(data.claim);
+      setClaimProof('');
+    } catch (err) {
+      setClaimError((err as Error).message);
+    } finally {
+      setSubmittingClaim(false);
     }
   }
 
@@ -254,11 +292,43 @@ export default function AnnouncementDetailPage() {
       )}
 
       {/* FR-16: an object at the reception desk is claimed there, with the proof. */}
-      {!isAuthor && atReception && isEditable(announcement) && (
-        <p className="notice">
-          This object is kept at the reception desk. To claim it, go to the desk and describe a private detail of the
-          object: the staff will check it.
+      {token && !isAuthor && atReception && isEditable(announcement) && myClaim && (
+        <p className="notice success" role="status">
+          {myClaim.status === 'pending' && 'Your claim was sent. The reception staff will check your proof.'}
+          {myClaim.status === 'declined' && 'Your claim was declined: your proof does not match. Ask the reception for help.'}
+          {myClaim.status === 'accepted' && 'Your claim was accepted.'}
         </p>
+      )}
+      {token && !isAuthor && atReception && isEditable(announcement) && !myClaim && (
+        <div className="discussion-section">
+          <h2>Is it yours?</h2>
+          <p>
+            This object is kept at the reception desk. Describe a private detail of the object (a mark, what is
+            inside...): the staff compare it with the detail given by the finder, then hand the object over.
+          </p>
+          {claimError && (
+            <p className="notice error" role="alert">
+              {claimError}
+            </p>
+          )}
+          <form onSubmit={submitClaim}>
+            <label htmlFor="claimProof">Proof of ownership</label>
+            <textarea
+              id="claimProof"
+              value={claimProof}
+              onChange={(event) => setClaimProof(event.target.value)}
+              maxLength={1000}
+              rows={5}
+              required
+            />
+            <button className="primary" type="submit" disabled={submittingClaim || !claimProof.trim()}>
+              {submittingClaim ? 'Sending...' : 'Claim at reception'}
+            </button>
+          </form>
+        </div>
+      )}
+      {!token && atReception && isEditable(announcement) && (
+        <p className="notice">This object is kept at the reception desk. Sign in to claim it.</p>
       )}
 
       {/* SCRUM-30 (FR-11): start a discussion with a proof. */}
