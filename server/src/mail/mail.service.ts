@@ -130,6 +130,14 @@ export class MailService {
     await this.send(to, 'New discussion about your announcement', `${base}/messages?discussionId=${discussionId}`, intro);
   }
 
+  // SCRUM-51 (FR-13 "archive reminder"): sent once, 7 days before the announcement is archived.
+  async archiveReminder(to: string, announcement: ConfirmedAnnouncement, archiveDate: Date): Promise<void> {
+    const base = this.getClientBaseUrl();
+    const day = archiveDate.toISOString().slice(0, 10);
+    const intro = `Your announcement "${announcement.title}" will be archived on ${day} if the object has not been claimed by then. An archived announcement is no longer shown in the search results.`;
+    await this.send(to, 'Your FindIt announcement will be archived soon', `${base}/announcements/${announcement.id}`, intro);
+  }
+
   // SCRUM-32 (FR-13 "item returned"): sent to the other person when one of them confirms the handover.
   async handover(
     to: string,

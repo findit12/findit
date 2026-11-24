@@ -1,6 +1,8 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { In } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { Announcement, AnnouncementStatus } from '../announcements/announcement.entity';
 import { AuthToken } from '../auth/auth-token.entity';
 import { SavedSearch } from '../saved-searches/saved-search.entity';
 import { User, UserRole, UserStatus } from './user.entity';
@@ -27,6 +29,7 @@ describe('UsersService', () => {
   let users: { find: jest.Mock; findOneBy: jest.Mock; save: jest.Mock };
   let tokens: { delete: jest.Mock };
   let savedSearches: { delete: jest.Mock };
+  let announcements: { update: jest.Mock };
 
   // The repository answers with the users of this table, by id.
   function setUsers(...rows: User[]) {
@@ -38,12 +41,14 @@ describe('UsersService', () => {
     users = { find: jest.fn(), findOneBy: jest.fn(), save: jest.fn((row: User) => Promise.resolve(row)) };
     tokens = { delete: jest.fn().mockResolvedValue(undefined) };
     savedSearches = { delete: jest.fn().mockResolvedValue(undefined) };
+    announcements = { update: jest.fn().mockResolvedValue({ affected: 2 }) };
     const moduleRef = await Test.createTestingModule({
       providers: [
         UsersService,
         { provide: getRepositoryToken(User), useValue: users },
         { provide: getRepositoryToken(AuthToken), useValue: tokens },
         { provide: getRepositoryToken(SavedSearch), useValue: savedSearches },
+        { provide: getRepositoryToken(Announcement), useValue: announcements },
       ],
     }).compile();
     service = moduleRef.get(UsersService);
@@ -106,6 +111,16 @@ describe('UsersService', () => {
     expect(saved.passwordHash).toHaveLength(64);
     expect(tokens.delete).toHaveBeenCalledWith({ user: { id: 5 } });
     expect(savedSearches.delete).toHaveBeenCalledWith({ userId: 5 });
+  });
+
+  it('archives the announcements of the user that are still public (FR-25)', async () => {
+    setUsers(user());
+    await service.remove(5, 5);
+
+    expect(announcements.update).toHaveBeenCalledWith(
+      { authorId: 5, status: In([AnnouncementStatus.Available, AnnouncementStatus.Open]) },
+      { status: AnnouncementStatus.Archived },
+    );
   });
 
   it('refuses to delete the account of someone else', async () => {
