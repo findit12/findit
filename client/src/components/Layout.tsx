@@ -80,6 +80,9 @@ export default function Layout() {
                   <Link className="link-button" to="/admin/claims">
                     Claims
                   </Link>
+                  <Link className="link-button" to="/admin/reception">
+                    Reception
+                  </Link>
                   <Link className="link-button" to="/admin/users">
                     Users
                   </Link>
