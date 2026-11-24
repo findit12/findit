@@ -2,6 +2,7 @@ import { ConflictException, ForbiddenException, NotFoundException } from '@nestj
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Announcement, AnnouncementStatus, AnnouncementType } from '../announcements/announcement.entity';
+import { DailyLimitsService } from '../limits/daily-limits.service';
 import { MailService } from '../mail/mail.service';
 import { User } from '../users/user.entity';
 import { Discussion } from './discussion.entity';
@@ -50,6 +51,7 @@ describe('DiscussionsService (CRUD routes)', () => {
         { provide: getRepositoryToken(Announcement), useValue: {} },
         { provide: getRepositoryToken(User), useValue: {} },
         { provide: MailService, useValue: {} },
+        { provide: DailyLimitsService, useValue: {} },
       ],
     }).compile();
     service = moduleRef.get(DiscussionsService);

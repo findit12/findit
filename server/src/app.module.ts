@@ -21,6 +21,7 @@ import { Report } from './reports/report.entity';
 import { AuditLog } from './reports/audit-log.entity';
 import { ReportsModule } from './reports/reports.module';
 import { DiscussionsModule } from './discussions/discussions.module';
+import { LimitsModule } from './limits/limits.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { DiscussionsModule } from './discussions/discussions.module';
     SavedSearchesModule,
     DiscussionsModule,
     ReportsModule,
+    LimitsModule,
   ],
 })
 export class AppModule {}

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Announcement } from '../announcements/announcement.entity';
 import { AuthModule } from '../auth/auth.module';
+import { LimitsModule } from '../limits/limits.module';
 import { MailModule } from '../mail/mail.module';
 import { User } from '../users/user.entity';
 import { Discussion } from './discussion.entity';
@@ -15,6 +16,7 @@ import { Message } from './message.entity';
     TypeOrmModule.forFeature([Discussion, Message, Announcement, User]),
     AuthModule, // gives JwtService, used by JwtAuthGuard
     MailModule,
+    LimitsModule, // gives DailyLimitsService (FR-31)
   ],
   controllers: [DiscussionsController],
   providers: [DiscussionsService],

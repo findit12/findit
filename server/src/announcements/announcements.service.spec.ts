@@ -3,6 +3,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
 import { AnnouncementMatch } from './announcement-match.entity';
@@ -22,6 +24,7 @@ import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
 import { MatchingService } from './matching.service';
+import { DailyLimitsService } from '../limits/daily-limits.service';
 
 function photo(): Express.Multer.File {
   return {
@@ -113,6 +116,7 @@ describe('AnnouncementsService', () => {
 
   let savedSearches: { notifyMatches: jest.Mock };
   let matching: { matchNewAnnouncement: jest.Mock };
+  let limits: { assertCanDeclare: jest.Mock };
   let announcementMatches: { find: jest.Mock };
 
   beforeEach(async () => {
@@ -149,6 +153,7 @@ describe('AnnouncementsService', () => {
     };
 
     matching = { matchNewAnnouncement: jest.fn().mockResolvedValue(0) };
+    limits = { assertCanDeclare: jest.fn().mockResolvedValue(undefined) };
     announcementMatches = { find: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -186,6 +191,10 @@ describe('AnnouncementsService', () => {
           provide: MatchingService,
           useValue: matching,
         },
+        {
+          provide: DailyLimitsService,
+          useValue: limits,
+        },
       ],
     }).compile();
 
@@ -193,6 +202,16 @@ describe('AnnouncementsService', () => {
   });
 
   describe('create', () => {
+    it('asks the daily limit first and saves nothing when it is reached (FR-31, 429)', async () => {
+      limits.assertCanDeclare.mockRejectedValue(new HttpException('Too many.', HttpStatus.TOO_MANY_REQUESTS));
+
+      await expect(service.create(1, foundForm(), [photo()])).rejects.toMatchObject({ status: 429 });
+
+      expect(limits.assertCanDeclare).toHaveBeenCalledWith(1);
+      expect(photoStorage.save).not.toHaveBeenCalled();
+      expect(announcements.save).not.toHaveBeenCalled();
+    });
+
     it('saves a found announcement as Available, expiring in 90 days', async () => {
       const before = Date.now();
       await service.create(1, foundForm(), [photo()]);

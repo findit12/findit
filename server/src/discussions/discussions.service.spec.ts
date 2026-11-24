@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, HttpException, HttpStatus, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { In, IsNull, Not } from 'typeorm';
@@ -8,6 +8,7 @@ import {
   AnnouncementType,
   CurrentLocation,
 } from '../announcements/announcement.entity';
+import { DailyLimitsService } from '../limits/daily-limits.service';
 import { MailService } from '../mail/mail.service';
 import { User } from '../users/user.entity';
 import { Discussion } from './discussion.entity';
@@ -49,6 +50,7 @@ describe('DiscussionsService', () => {
   let announcements: { findOne: jest.Mock; update: jest.Mock };
   let users: { findOneBy: jest.Mock };
   let mail: { discussionStarted: jest.Mock; newMessage: jest.Mock; handover: jest.Mock };
+  let limits: { assertCanStartDiscussion: jest.Mock };
 
   beforeEach(async () => {
     discussions = {
@@ -67,6 +69,7 @@ describe('DiscussionsService', () => {
     };
     announcements = { findOne: jest.fn().mockResolvedValue(announcement()), update: jest.fn() };
     users = { findOneBy: jest.fn(({ id }) => Promise.resolve({ id, email: id === 1 ? 'finder@school.test' : 'owner@school.test' })) };
+    limits = { assertCanStartDiscussion: jest.fn().mockResolvedValue(undefined) };
     mail = {
       discussionStarted: jest.fn().mockResolvedValue(undefined),
       newMessage: jest.fn().mockResolvedValue(undefined),
@@ -81,6 +84,7 @@ describe('DiscussionsService', () => {
         { provide: getRepositoryToken(Announcement), useValue: announcements },
         { provide: getRepositoryToken(User), useValue: users },
         { provide: MailService, useValue: mail },
+        { provide: DailyLimitsService, useValue: limits },
       ],
     }).compile();
 
@@ -102,6 +106,16 @@ describe('DiscussionsService', () => {
         3,
       );
       expect(result).toEqual({ message: 'Discussion started successfully.', discussionId: 3 });
+    });
+
+    it('asks the daily limit and saves nothing when it is reached (FR-31, 429)', async () => {
+      limits.assertCanStartDiscussion.mockRejectedValue(new HttpException('Too many.', HttpStatus.TOO_MANY_REQUESTS));
+
+      await expect(service.start(2, { announcementId: 7, description: 'Cat sticker' })).rejects.toMatchObject({ status: 429 });
+
+      expect(limits.assertCanStartDiscussion).toHaveBeenCalledWith(2);
+      expect(discussions.save).not.toHaveBeenCalled();
+      expect(mail.discussionStarted).not.toHaveBeenCalled();
     });
 
     it('also works for a lost announcement (the initiator found the object)', async () => {

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/user.entity';
 import { AuthModule } from '../auth/auth.module';
 import { MailModule } from '../mail/mail.module';
+import { LimitsModule } from '../limits/limits.module';
 import { ReferenceModule } from '../reference/reference.module';
 import { SavedSearchesModule } from '../saved-searches/saved-searches.module';
 import { Announcement } from './announcement.entity';
@@ -19,6 +20,7 @@ import { PhotoStorageService } from './photo-storage.service';
     MailModule,
     ReferenceModule, // gives ReferenceService, used to check the ids of the form
     SavedSearchesModule, // gives SavedSearchesService, used to alert the saved searches
+    LimitsModule, // gives DailyLimitsService (FR-31)
   ],
   controllers: [AnnouncementsController],
   providers: [AnnouncementsService, PhotoStorageService, MatchingService],
