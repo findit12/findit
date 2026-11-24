@@ -1,4 +1,5 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
 
@@ -6,6 +7,31 @@ import { useAuth } from '../auth/AuthContext';
 export default function Layout() {
   const { token, role, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [unread, setUnread] = useState(0);
+
+  // FR-12: number of unread messages, refreshed every 10 seconds and on every page change.
+  useEffect(() => {
+    if (!token) {
+      setUnread(0);
+      return;
+    }
+    let active = true;
+    const load = () =>
+      apiRequest<{ unreadCount: number }>('/conversations/unread-count', { token })
+        .then((data) => {
+          if (active) setUnread(data.unreadCount);
+        })
+        .catch(() => {
+          if (active) setUnread(0);
+        });
+    void load();
+    const interval = window.setInterval(load, 10000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [token, location.pathname]);
 
   async function logout() {
     try {
@@ -37,6 +63,11 @@ export default function Layout() {
               </Link>
               <Link className="link-button" to="/messages">
                 Messages
+                {unread > 0 && (
+                  <span className="unread-badge" aria-label={`${unread} unread`}>
+                    {unread}
+                  </span>
+                )}
               </Link>
               {role === 'admin' && (
                 <>
