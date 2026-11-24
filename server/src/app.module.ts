@@ -18,6 +18,7 @@ import { SavedSearchesModule } from './saved-searches/saved-searches.module';
 import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
 import { Report } from './reports/report.entity';
+import { AuditLog } from './reports/audit-log.entity';
 import { ReportsModule } from './reports/reports.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 
@@ -39,6 +40,7 @@ import { DiscussionsModule } from './discussions/discussions.module';
   AnnouncementMatch,
   Discussion,
   Report,
+  AuditLog,
 ],
       synchronize: false,
     }),

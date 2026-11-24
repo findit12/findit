@@ -11,6 +11,7 @@ import { SavedSearch } from './saved-searches/saved-search.entity';
 import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
 import { Report } from './reports/report.entity';
+import { AuditLog } from './reports/audit-log.entity';
 
 // Used by the migration commands (npm run migration:run, npm run migration:check).
 export default new DataSource({
@@ -28,6 +29,7 @@ export default new DataSource({
   Message,
   Discussion,
   Report,
+  AuditLog,
 ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
