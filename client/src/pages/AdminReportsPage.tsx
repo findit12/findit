@@ -132,7 +132,7 @@ export default function AdminReportsPage() {
                   {report.announcement.title}
                 </Link>
                 <small>
-                  {report.announcement.type} ´ {report.announcement.status} · Author #{report.announcement.authorId}
+                  {report.announcement.type} · {report.announcement.status} · Author #{report.announcement.authorId}
                 </small>
 
                 <h3>Reported by</h3>

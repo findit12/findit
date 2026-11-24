@@ -211,7 +211,7 @@ async function confirmHandover() {
   }
 
   if (!announcement) {
-    return <section className="card">Loadingâ€¦</section>;
+    return <section className="card">Loading...</section>;
   }
 
 const handoverDiscussion = discussions.find(
@@ -245,7 +245,7 @@ const canConfirmHandover =
       <h1>{announcement.title}</h1>
 
       <p className="intro">
-        {announcement.category.name} Â· {announcement.objectType.name}
+        {announcement.category.name} · {announcement.objectType.name}
       </p>
 
       {announcement.photos.length > 0 && (
