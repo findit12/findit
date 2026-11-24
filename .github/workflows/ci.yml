@@ -17,7 +17,16 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix client
       - run: npm ci --prefix server
+      - name: Lint
+        run: npm run lint
       - run: npm run build
-      - run: npm test --prefix server
+      - name: Test with coverage (fails under 80 % lines, statements, functions and 70 % branches)
+        run: npm run test:cov --prefix server
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: server/coverage
       - name: Verify no .js files exist in TypeScript source directories
         run: test -z "$(find client/src server/src -name '*.js' -print -quit)"

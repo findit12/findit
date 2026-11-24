@@ -5,9 +5,18 @@
     "dev": "concurrently \"npm run start:dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "start": "npm run start --prefix server",
-    "test": "npm run test --prefix server"
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "npm run test --prefix server",
+    "test:cov": "npm run test:cov --prefix server"
   },
   "devDependencies": {
-    "concurrently": "9.1.2"
+    "@eslint/js": "10.0.1",
+    "concurrently": "9.1.2",
+    "eslint": "10.15.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.74.0"
   }
 }

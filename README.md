@@ -72,3 +72,11 @@ For continuous integration with a separate database, set `DATABASE_URL` in your 
 - **Auth**: Single-use hashed `AuthToken` entity for verification and password reset.
 - **Security**: Passwords hashed with bcrypt; unverified accounts blocked from signing in with resend option.
 - **Reliability**: Asynchronous background email delivery preventing HTTP 500 regressions during SMTP outages.
+
+## Quality checks (Labs 4, 5 and 6)
+
+- `npm run lint`: ESLint on the whole repository (server and client, TypeScript only). `npm run lint:fix` fixes what can be fixed automatically.
+- `npm run test:cov`: Jest with coverage. The run fails if a global coverage is under 80 % (statements, functions, lines) or 70 % (branches). The HTML report is written in `server/coverage/`.
+- The GitHub Actions workflow (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint`, `npm run build`, `npm run test:cov --prefix server` and the "no `.js` in the TypeScript sources" check, then uploads `server/coverage` as the `coverage-report` artifact.
+- `postman/FindIt API Postman Collection.json`: Postman collection (v2.1) with tests for the authentication, the gallery, the saved searches CRUD and the admin access control. Import it in Postman, set the collection variables `email` and `password` to a verified student account, start the server (`npm run dev`) and run the collection.
+- `js-practice.js` and `practice/`: JavaScript exercises of Lab 5 adapted to FindIt (`node js-practice.js`, `node practice/main.mjs`). They are exercises outside the application sources.

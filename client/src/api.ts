@@ -17,6 +17,7 @@ interface RequestOptions {
 // Sends a request to the API and returns the JSON answer.
 // The body is sent as JSON, or as multipart/form-data when it is a FormData (form with files).
 // If the server answers with an error, it throws an ApiError with the server message.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- callers without a type parameter keep an untyped answer
 export async function apiRequest<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, token } = options;
   const isFormData = body instanceof FormData;
