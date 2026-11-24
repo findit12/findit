@@ -31,6 +31,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (typeof res === 'string') {
         message = res;
       } else if (typeof res === 'object' && res !== null) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the Nest response object has no fixed shape
         const obj = res as Record<string, any>;
         const { statusCode, message: msg, error: err, ...rest } = obj;
         extra = rest;
