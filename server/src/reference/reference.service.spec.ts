@@ -93,4 +93,30 @@ describe('ReferenceService', () => {
       expect(places.save).not.toHaveBeenCalled();
     });
   });
+  describe('getUnidentified (SCRUM-54, FR-32)', () => {
+    it('creates the three "Unidentified" rows the first time', async () => {
+      categories.findOneBy.mockResolvedValue(null);
+      objectTypes.findOneBy.mockResolvedValue(null);
+      places.findOneBy.mockResolvedValue(null);
+      categories.save.mockResolvedValue({ id: 10, name: 'Unidentified' });
+      objectTypes.save.mockResolvedValue({ id: 11 });
+      places.save.mockResolvedValue({ id: 12 });
+
+      await expect(service.getUnidentified()).resolves.toEqual({ categoryId: 10, objectTypeId: 11, placeId: 12 });
+      expect(categories.create).toHaveBeenCalledWith({ name: 'Unidentified' });
+      expect(objectTypes.create).toHaveBeenCalledWith({ categoryId: 10, name: 'Unidentified' });
+      expect(places.create).toHaveBeenCalledWith({ name: 'Unidentified' });
+    });
+
+    it('reuses the rows that already exist', async () => {
+      categories.findOneBy.mockResolvedValue({ id: 3 });
+      objectTypes.findOneBy.mockResolvedValue({ id: 4 });
+      places.findOneBy.mockResolvedValue({ id: 5 });
+
+      await expect(service.getUnidentified()).resolves.toEqual({ categoryId: 3, objectTypeId: 4, placeId: 5 });
+      expect(categories.save).not.toHaveBeenCalled();
+      expect(objectTypes.save).not.toHaveBeenCalled();
+      expect(places.save).not.toHaveBeenCalled();
+    });
+  });
 });

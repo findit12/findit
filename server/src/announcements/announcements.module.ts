@@ -24,5 +24,7 @@ import { PhotoStorageService } from './photo-storage.service';
   ],
   controllers: [AnnouncementsController],
   providers: [AnnouncementsService, PhotoStorageService, MatchingService],
+  // ReceptionModule uses AnnouncementsService to publish the declarations of the reception staff (FR-32).
+  exports: [AnnouncementsService],
 })
 export class AnnouncementsModule {}

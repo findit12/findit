@@ -6,6 +6,8 @@ import { ObjectType } from './object-type.entity';
 import { Place } from './place.entity';
 import { SEED_CATEGORIES, SEED_PLACES } from './reference.seed';
 
+export const UNIDENTIFIED = 'Unidentified';
+
 @Injectable()
 export class ReferenceService implements OnApplicationBootstrap {
   constructor(
@@ -33,6 +35,26 @@ export class ReferenceService implements OnApplicationBootstrap {
     if ((await this.places.count()) === 0) {
       await this.places.save(SEED_PLACES.map((name) => this.places.create({ name })));
     }
+  }
+
+  // FR-32: the reception staff do not know the category, the precise object or the place, so they
+  // all are "Unidentified". The three rows are created the first time they are needed.
+  async getUnidentified(): Promise<{ categoryId: number; objectTypeId: number; placeId: number }> {
+    let category = await this.categories.findOneBy({ name: UNIDENTIFIED });
+    if (!category) {
+      category = await this.categories.save(this.categories.create({ name: UNIDENTIFIED }));
+    }
+    let objectType = await this.objectTypes.findOneBy({ categoryId: category.id, name: UNIDENTIFIED });
+    if (!objectType) {
+      objectType = await this.objectTypes.save(
+        this.objectTypes.create({ categoryId: category.id, name: UNIDENTIFIED }),
+      );
+    }
+    let place = await this.places.findOneBy({ name: UNIDENTIFIED });
+    if (!place) {
+      place = await this.places.save(this.places.create({ name: UNIDENTIFIED }));
+    }
+    return { categoryId: category.id, objectTypeId: objectType.id, placeId: place.id };
   }
 
   // Returns the lists used by the form: the categories with their precise objects, and the places.
