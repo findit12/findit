@@ -182,3 +182,71 @@ export class UpdateAnnouncementDto {
   @MaxLength(200)
   hiddenDetail?: string;
 }
+
+
+// Lab 6: PUT /announcements/:id replaces the whole editable part of an announcement.
+// Unlike PATCH (UpdateAnnouncementDto), the main fields are required here. The optional text
+// fields that are missing are emptied. The type, the location and the photos still cannot change.
+export class ReplaceAnnouncementDto {
+  @ApiProperty({ example: 'Black iPhone 13', maxLength: 100 })
+  @Trim()
+  @MaxLength(100)
+  @IsString()
+  @IsNotEmpty({ message: 'Enter a title.' })
+  title!: string;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a category.' })
+  categoryId!: number;
+
+  @ApiProperty({ example: 2 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a precise object.' })
+  objectTypeId!: number;
+
+  @ApiProperty({ maxLength: 1000 })
+  @Trim()
+  @MaxLength(1000)
+  @IsString()
+  @IsNotEmpty({ message: 'Enter a description.' })
+  description!: string;
+
+  @ApiPropertyOptional({ maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  brand?: string;
+
+  @ApiPropertyOptional({ maxLength: 50 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  color?: string;
+
+  @ApiProperty({ example: '2026-10-10' })
+  @IsDateString({ strict: true }, { message: 'Enter a valid date.' })
+  eventDate!: string;
+
+  @ApiProperty({ example: 1 })
+  @Type(() => Number)
+  @IsInt({ message: 'Choose a place.' })
+  placeId!: number;
+
+  @ApiPropertyOptional({ maxLength: 200 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  placeDetails?: string;
+
+  // Required for a found announcement (the service refuses it if it is missing).
+  @ApiPropertyOptional({ maxLength: 200 })
+  @Trim()
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  hiddenDetail?: string;
+}
