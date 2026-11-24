@@ -17,6 +17,17 @@ import { Report, ReportStatus } from './report.entity';
 // delete it while it is active or hidden. Returned, Closed, Deleted and Archived are final: 409.
 const ACTIVE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
 
+// What the reporter can see of a report.
+function toReportView(report: Report) {
+  return {
+    id: report.id,
+    announcementId: report.announcementId,
+    reason: report.reason,
+    status: report.status,
+    createdAt: report.createdAt,
+  };
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -52,6 +63,48 @@ export class ReportsService {
       this.reports.create({ announcementId, reporterId, reason: dto.reason, status: ReportStatus.Pending }),
     );
     return { id: report.id, announcementId: report.announcementId, status: report.status, createdAt: report.createdAt };
+  }
+
+  // Lab 6: the reports written by the signed-in user, newest first.
+  async listMine(reporterId: number) {
+    const reports = await this.reports.find({ where: { reporterId }, order: { createdAt: 'DESC', id: 'DESC' } });
+    return { reports: reports.map(toReportView) };
+  }
+
+  async getMine(reportId: number, reporterId: number) {
+    return { report: toReportView(await this.findOwnReport(reportId, reporterId)) };
+  }
+
+  // The reporter can still change the reason while no administrator has looked at the report.
+  async updateMine(reportId: number, reporterId: number, dto: CreateReportDto) {
+    const report = await this.findOwnReport(reportId, reporterId);
+    this.checkPending(report);
+    report.reason = dto.reason;
+    return { report: toReportView(await this.reports.save(report)) };
+  }
+
+  // The reporter can withdraw a report that is still pending.
+  async removeMine(reportId: number, reporterId: number): Promise<void> {
+    const report = await this.findOwnReport(reportId, reporterId);
+    this.checkPending(report);
+    await this.reports.delete(report.id);
+  }
+
+  private async findOwnReport(reportId: number, reporterId: number): Promise<Report> {
+    const report = await this.reports.findOneBy({ id: reportId });
+    if (!report) {
+      throw new NotFoundException('Report not found.');
+    }
+    if (report.reporterId !== reporterId) {
+      throw new ForbiddenException('You can only use your own reports.');
+    }
+    return report;
+  }
+
+  private checkPending(report: Report): void {
+    if (report.status !== ReportStatus.Pending) {
+      throw new ConflictException('This report has already been handled.');
+    }
   }
 
   // UC-4: the moderation queue, oldest report first.

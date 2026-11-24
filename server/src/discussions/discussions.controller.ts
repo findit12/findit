@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateDiscussionDto } from './create-discussion.dto';
 import { CreateMessageDto } from './create-message.dto';
+import { UpdateDiscussionDto } from './update-discussion.dto';
 import { DiscussionsService } from './discussions.service';
 
 // SCRUM-30 to SCRUM-32: the routes of the SDD (section 5), "/api/conversations".
@@ -38,6 +39,79 @@ export class DiscussionsController {
   @ApiResponse({ status: 200, description: '{ unreadCount }' })
   countUnread(@CurrentUserId() userId: number) {
     return this.service.countUnread(userId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Read one of my discussions with its proof' })
+  @ApiResponse({ status: 200, description: 'The discussion' })
+  @ApiResponse({ status: 403, description: 'Not a participant' })
+  @ApiResponse({ status: 404, description: 'Discussion not found' })
+  findOne(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.service.findOne(id, userId);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Correct the proof of a discussion (only the person who started it)' })
+  @ApiResponse({ status: 200, description: 'The updated discussion' })
+  @ApiResponse({ status: 400, description: 'Missing proof' })
+  @ApiResponse({ status: 403, description: 'Not the person who started the discussion' })
+  @ApiResponse({ status: 404, description: 'Discussion not found' })
+  @ApiResponse({ status: 409, description: 'Announcement no longer available' })
+  updateProof(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateDiscussionDto) {
+    return this.service.updateProof(id, userId, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a discussion and its messages (only the person who started it)' })
+  @ApiResponse({ status: 204, description: 'Discussion deleted' })
+  @ApiResponse({ status: 403, description: 'Not the person who started the discussion' })
+  @ApiResponse({ status: 404, description: 'Discussion not found' })
+  remove(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(id, userId);
+  }
+
+  @Get(':id/messages/:messageId')
+  @ApiOperation({ summary: 'Read one message' })
+  @ApiResponse({ status: 200, description: 'The message' })
+  @ApiResponse({ status: 403, description: 'Not a participant' })
+  @ApiResponse({ status: 404, description: 'Discussion or message not found' })
+  getMessage(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+  ) {
+    return this.service.getMessage(id, messageId, userId);
+  }
+
+  @Put(':id/messages/:messageId')
+  @ApiOperation({ summary: 'Change one of my messages while it is unread' })
+  @ApiResponse({ status: 200, description: 'The updated message' })
+  @ApiResponse({ status: 403, description: 'Not your message' })
+  @ApiResponse({ status: 404, description: 'Discussion or message not found' })
+  @ApiResponse({ status: 409, description: 'The message has already been read' })
+  updateMessage(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+    @Body() dto: CreateMessageDto,
+  ) {
+    return this.service.updateMessage(id, messageId, userId, dto);
+  }
+
+  @Delete(':id/messages/:messageId')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete one of my messages while it is unread' })
+  @ApiResponse({ status: 204, description: 'Message deleted' })
+  @ApiResponse({ status: 403, description: 'Not your message' })
+  @ApiResponse({ status: 404, description: 'Discussion or message not found' })
+  @ApiResponse({ status: 409, description: 'The message has already been read' })
+  removeMessage(
+    @CurrentUserId() userId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('messageId', ParseIntPipe) messageId: number,
+  ) {
+    return this.service.removeMessage(id, messageId, userId);
   }
 
   @Get(':id/messages')

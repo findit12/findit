@@ -55,4 +55,13 @@ describe('JwtAuthGuard', () => {
 
     await expect(guard.canActivate(contextFor(request))).rejects.toThrow(UnauthorizedException);
   });
+
+  it('refuses a valid token when the account was deleted (FR-25)', async () => {
+    jwt.verify.mockReturnValue({ sub: '12' });
+    users.findOne.mockResolvedValue({ id: 12, status: UserStatus.Anonymized });
+    const request: AuthenticatedRequest = { headers: { authorization: 'Bearer good' } };
+
+    await expect(guard.canActivate(contextFor(request))).rejects.toThrow('Authentication required.');
+    expect(request.userId).toBeUndefined();
+  });
 });

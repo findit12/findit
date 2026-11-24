@@ -9,6 +9,8 @@ export enum UserRole {
 export enum UserStatus {
   Active = 'active',
   Suspended = 'suspended',
+  // FR-25: the account was deleted. The row is kept (announcements and messages point to it) but it holds no personal data.
+  Anonymized = 'anonymized',
 }
 
 @Entity('users')
