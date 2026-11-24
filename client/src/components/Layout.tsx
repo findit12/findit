@@ -77,6 +77,9 @@ export default function Layout() {
                   <Link className="link-button" to="/admin/reports">
                     Moderation
                   </Link>
+                  <Link className="link-button" to="/admin/claims">
+                    Claims
+                  </Link>
                   <Link className="link-button" to="/admin/users">
                     Users
                   </Link>
