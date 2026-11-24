@@ -6,10 +6,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { AnnouncementMatch } from './announcement-match.entity';
-import { Discussion } from '../discussions/discussion.entity';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { In, IsNull, Not } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -24,7 +22,6 @@ import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
 import { MatchingService } from './matching.service';
-import { Message } from '../discussions/message.entity';
 
 function photo(): Express.Multer.File {
   return {
@@ -112,30 +109,11 @@ describe('AnnouncementsService', () => {
   };
   let photoStorage: { save: jest.Mock };
 
-  let mail: {
-    confirmation: jest.Mock;
-    discussionStarted: jest.Mock;
-    newMessage: jest.Mock;
-    handover: jest.Mock;
-  };
+  let mail: { confirmation: jest.Mock };
 
   let savedSearches: { notifyMatches: jest.Mock };
   let matching: { matchNewAnnouncement: jest.Mock };
   let announcementMatches: { find: jest.Mock };
-
-  let discussions: {
-    create: jest.Mock;
-    save: jest.Mock;
-    find: jest.Mock;
-    findOne: jest.Mock;
-  };
-  let messages: {
-    create: jest.Mock;
-    save: jest.Mock;
-    find: jest.Mock;
-    update: jest.Mock;
-    count: jest.Mock;
-  };
 
   beforeEach(async () => {
     announcements = {
@@ -163,12 +141,7 @@ describe('AnnouncementsService', () => {
       save: jest.fn().mockResolvedValue(['a.jpg']),
     };
 
-    mail = {
-      confirmation: jest.fn().mockResolvedValue(undefined),
-      discussionStarted: jest.fn().mockResolvedValue(undefined),
-      newMessage: jest.fn().mockResolvedValue(undefined),
-      handover: jest.fn().mockResolvedValue(undefined),
-    };
+    mail = { confirmation: jest.fn().mockResolvedValue(undefined) };
 
     savedSearches = {
       notifyMatches: jest.fn().mockResolvedValue(undefined),
@@ -176,26 +149,6 @@ describe('AnnouncementsService', () => {
 
     matching = { matchNewAnnouncement: jest.fn().mockResolvedValue(0) };
     announcementMatches = { find: jest.fn().mockResolvedValue([]) };
-
-    discussions = {
-      create: jest.fn((data) => data),
-      save: jest.fn().mockImplementation(async (data) => ({
-        id: 1,
-        ...data,
-      })),
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
-    };
-messages = {
-  create: jest.fn((data) => data),
-  save: jest.fn().mockImplementation(async (data) => ({
-    id: 1,
-    ...data,
-  })),
-  find: jest.fn().mockResolvedValue([]),
-  update: jest.fn().mockResolvedValue({ affected: 0 }),
-  count: jest.fn().mockResolvedValue(0),
-};
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -208,14 +161,6 @@ messages = {
           provide: getRepositoryToken(AnnouncementMatch),
           useValue: announcementMatches,
         },
-        {
-          provide: getRepositoryToken(Discussion),
-          useValue: discussions,
-        },
-{
-  provide: getRepositoryToken(Message),
-  useValue: messages,
-},
         {
           provide: getRepositoryToken(User),
           useValue: users,
@@ -910,586 +855,52 @@ messages = {
     });
   });
 
-  describe('startDiscussion (Jira task)', () => {
-    it('allows another user to start a discussion with proof', async () => {
-      announcements.findOne.mockResolvedValue({
-        ...storedAnnouncement(),
-        author: {
-          id: 1,
-          email: 'finder@school.test',
-        },
-      });
-
-      const result = await service.startDiscussion(7, 2, {
-        description: 'The phone has a scratch near the charging port.',
-      });
-
-      expect(discussions.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          announcementId: 7,
-          ownerId: 2,
-          description: 'The phone has a scratch near the charging port.',
-        }),
-      );
-
-      expect(mail.discussionStarted).toHaveBeenCalledWith(
-        'finder@school.test',
-        {
-          id: 7,
-          title: 'Black phone',
-        },
-      );
-
-      expect(result.message).toBe('Discussion started successfully.');
-    });
-
-    it('does not allow the finder to claim their own announcement', async () => {
-      announcements.findOne.mockResolvedValue({
-        ...storedAnnouncement(),
-        author: {
-          id: 1,
-          email: 'finder@school.test',
-        },
-      });
-
-      await expect(
-        service.startDiscussion(7, 1, {
-          description: 'I own this phone.',
-        }),
-      ).rejects.toThrow(ForbiddenException);
-
-      expect(discussions.save).not.toHaveBeenCalled();
-      expect(mail.discussionStarted).not.toHaveBeenCalled();
-    });
-
-    it('rejects discussions about lost announcements', async () => {
-      announcements.findOne.mockResolvedValue({
-        ...storedAnnouncement({
-          type: AnnouncementType.Lost,
-        }),
-        author: {
-          id: 1,
-          email: 'finder@school.test',
-        },
-      });
-
-      await expect(
-        service.startDiscussion(7, 2, {
-          description: 'This is my phone.',
-        }),
-      ).rejects.toThrow(BadRequestException);
-
-      expect(discussions.save).not.toHaveBeenCalled();
-    });
-
-    it('rejects discussions when the found announcement is unavailable', async () => {
-      announcements.findOne.mockResolvedValue({
-        ...storedAnnouncement({
-          status: AnnouncementStatus.Returned,
-        }),
-        author: {
-          id: 1,
-          email: 'finder@school.test',
-        },
-      });
-
-      await expect(
-        service.startDiscussion(7, 2, {
-          description: 'This is my phone.',
-        }),
-      ).rejects.toThrow(ConflictException);
-
-      expect(discussions.save).not.toHaveBeenCalled();
-    });
-
-    it('does not create a discussion if the announcement does not exist', async () => {
-      announcements.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.startDiscussion(999, 2, {
-          description: 'This is my phone.',
-        }),
-      ).rejects.toThrow(NotFoundException);
-
-      expect(discussions.save).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('returnItem (SCRUM-32)', () => {
-    const announcement = {
-      ...storedAnnouncement(),
-      authorId: 1,
-      type: AnnouncementType.Found,
-      status: AnnouncementStatus.Available,
-      title: 'Black phone',
-      returnedAt: null,
-    };
-
-    const discussion = {
-      id: 1,
-      announcementId: 7,
-      ownerId: 2,
-      owner: {
-        id: 2,
-        email: 'claimant@school.test',
-      },
-    };
-
-    beforeEach(() => {
-      announcement.status = AnnouncementStatus.Available;
-      announcement.returnedAt = null;
-      announcements.findOne.mockResolvedValue({ ...announcement });
-      discussions.findOne.mockResolvedValue({ ...discussion });
-    });
-
-    it('allows the finder to confirm handover and notifies the claimant', async () => {
-      const result = await service.returnItem(1, 7, 1);
-
-      expect(discussions.findOne).toHaveBeenCalledWith({
-        where: { id: 1, announcementId: 7 },
-        relations: { owner: true },
-      });
-
-      expect(announcements.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: AnnouncementStatus.Returned,
-          returnedAt: expect.any(Date),
-        }),
-      );
-
-      expect(mail.handover).toHaveBeenCalledWith(
-        'claimant@school.test',
-        {
-          id: 7,
-          title: 'Black phone',
-        },
-        'finder',
-      );
-
-      expect(result.status).toBe(AnnouncementStatus.Returned);
-    });
-
-    it('allows the claimant to confirm handover and notifies the finder', async () => {
-      const result = await service.returnItem(2, 7, 1);
-
-      expect(users.findOneBy).toHaveBeenCalledWith({ id: 1 });
-      expect(mail.handover).toHaveBeenCalledWith(
-        'elea@school.test',
-        {
-          id: 7,
-          title: 'Black phone',
-        },
-        'owner',
-      );
-      expect(announcements.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: AnnouncementStatus.Returned,
-          returnedAt: expect.any(Date),
-        }),
-      );
-      expect(result.status).toBe(AnnouncementStatus.Returned);
-    });
-
-    it('does not allow an unrelated user to confirm handover', async () => {
-      await expect(
-        service.returnItem(3, 7, 1),
-      ).rejects.toThrow(ForbiddenException);
-
-      expect(announcements.save).not.toHaveBeenCalled();
-      expect(mail.handover).not.toHaveBeenCalled();
-    });
-
-    it('rejects a discussion belonging to another announcement', async () => {
-  announcements.findOne.mockResolvedValue({
-    ...storedAnnouncement(),
-    authorId: 1,
-    type: AnnouncementType.Found,
-    status: AnnouncementStatus.Available,
-  });
-
-  discussions.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.returnItem(1, 7, 99),
-      ).rejects.toThrow(NotFoundException);
-
-      expect(announcements.save).not.toHaveBeenCalled();
-      expect(mail.handover).not.toHaveBeenCalled();
-    });
-
-    it('rejects an announcement that is already returned', async () => {
-      announcements.findOne.mockResolvedValue({
-        ...announcement,
-        status: AnnouncementStatus.Returned,
-      });
-
-      await expect(
-        service.returnItem(1, 7, 1),
-      ).rejects.toThrow(ConflictException);
-
-      expect(discussions.findOne).not.toHaveBeenCalled();
-      expect(mail.handover).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('SCRUM-31 messaging', () => {
-    const discussion = {
-  id: 1,
-  ownerId: 2,
-  announcement: {
-    id: 7,
-    title: 'Black phone',
-    authorId: 1,
-  },
-};
-
-    beforeEach(() => {
-      discussions.findOne.mockResolvedValue(discussion);
-    });
-
-    describe('sendMessage', () => {
-      it('allows a participant to send a message', async () => {
-        const result = await service.sendMessage(1, 2, {
-          content: 'I can collect the phone tomorrow.',
-        });
-
-        expect(discussions.findOne).toHaveBeenCalledWith({
-          where: { id: 1 },
-          relations: { announcement: true },
-        });
-
-        expect(messages.create).toHaveBeenCalledWith({
-          discussionId: 1,
-          senderId: 2,
-          content: 'I can collect the phone tomorrow.',
-          readAt: null,
-        });
-
-        expect(messages.save).toHaveBeenCalled();
-        expect(result.message).toMatchObject({
-          discussionId: 1,
-          senderId: 2,
-          content: 'I can collect the phone tomorrow.',
-        });
-      });
-
-      it('notifies the finder when the claimant sends a message', async () => {
-        await service.sendMessage(1, 2, {
-          content: 'I can collect the phone tomorrow.',
-        });
-
-        expect(users.findOneBy).toHaveBeenCalledWith({ id: 1 });
-        expect(mail.newMessage).toHaveBeenCalledWith(
-          'elea@school.test',
-          {
-            announcementId: 7,
-            announcementTitle: 'Black phone',
-          },
-        );
-      });
-
-      it('notifies the claimant when the finder sends a message', async () => {
-        discussions.findOne.mockResolvedValue({
-          ...discussion,
-          ownerId: 2,
-        });
-
-        users.findOneBy.mockResolvedValue({
-          id: 2,
-          email: 'claimant@school.test',
-        });
-
-        await service.sendMessage(1, 1, {
-          content: 'I found your claim details correct.',
-        });
-
-        expect(users.findOneBy).toHaveBeenCalledWith({ id: 2 });
-        expect(mail.newMessage).toHaveBeenCalledWith(
-          'claimant@school.test',
-          {
-            announcementId: 7,
-            announcementTitle: 'Black phone',
-          },
-        );
-      });
-
-      it('rejects a user who is not a participant', async () => {
-        await expect(
-          service.sendMessage(1, 3, {
-            content: 'Hello',
-          }),
-        ).rejects.toThrow(ForbiddenException);
-
-        expect(messages.save).not.toHaveBeenCalled();
-      });
-
-      it('returns 404 when the discussion does not exist', async () => {
-        discussions.findOne.mockResolvedValue(null);
-
-        await expect(
-          service.sendMessage(999, 2, {
-            content: 'Hello',
-          }),
-        ).rejects.toThrow(NotFoundException);
-
-        expect(messages.save).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('getMessages', () => {
-      it('returns messages and marks incoming messages as read', async () => {
-        const conversationMessages = [
-          {
-            id: 1,
-            discussionId: 1,
-            senderId: 2,
-            content: 'Hello',
-          },
-          {
-            id: 2,
-            discussionId: 1,
-            senderId: 1,
-            content: 'Hello, how can I help?',
-          },
-        ];
-
-        messages.find.mockResolvedValue(conversationMessages);
-
-        const result = await service.getMessages(1, 2);
-
-        expect(messages.update).toHaveBeenCalledWith(
-          {
-            discussionId: 1,
-            senderId: Not(2),
-            readAt: IsNull(),
-          },
-          {
-            readAt: expect.any(Date),
-          },
-        );
-
-        expect(messages.find).toHaveBeenCalledWith({
-          where: { discussionId: 1 },
-          order: { createdAt: 'ASC', id: 'ASC' },
-        });
-
-        expect(result.messages).toEqual(conversationMessages);
-      });
-
-      it('rejects a user who is not a participant', async () => {
-        await expect(
-          service.getMessages(1, 3),
-        ).rejects.toThrow(ForbiddenException);
-
-        expect(messages.find).not.toHaveBeenCalled();
-        expect(messages.update).not.toHaveBeenCalled();
-      });
-
-      it('returns 404 when the discussion does not exist', async () => {
-        discussions.findOne.mockResolvedValue(null);
-
-        await expect(
-          service.getMessages(999, 2),
-        ).rejects.toThrow(NotFoundException);
-      });
-    });
-
-        describe('getUnreadCount', () => {
-      it('counts unread messages across the user discussions', async () => {
-        discussions.find.mockResolvedValue([
-          { id: 1 },
-          { id: 2 },
-        ]);
-
-        messages.count.mockResolvedValue(3);
-
-        const result = await service.getUnreadCount(2);
-
-        expect(discussions.find).toHaveBeenCalledWith({
-          where: [
-            { ownerId: 2 },
-            { announcement: { authorId: 2 } },
-          ],
-          relations: { announcement: true },
-        });
-
-        expect(messages.count).toHaveBeenCalledWith({
-          where: {
-            discussionId: In([1, 2]),
-            senderId: Not(2),
-            readAt: IsNull(),
-          },
-        });
-
-        expect(result).toEqual({ unreadCount: 3 });
-      });
-
-      it('returns zero without querying messages when there are no discussions', async () => {
-        discussions.find.mockResolvedValue([]);
-
-        const result = await service.getUnreadCount(2);
-
-        expect(result).toEqual({ unreadCount: 0 });
-        expect(messages.count).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('getDiscussions', () => {
-      it('shows the claimant to the finder in the inbox', async () => {
-        discussions.find.mockResolvedValue([
-          {
-            id: 1,
-            announcementId: 7,
-            ownerId: 2,
-            description: 'Private proof description',
-            createdAt: new Date('2026-10-20T10:00:00Z'),
-            announcement: {
-              authorId: 1,
-              title: 'Black phone',
-              author: {
-                id: 1,
-                firstName: 'Finder',
-                lastName: 'One',
-              },
-            },
-            owner: {
-              id: 2,
-              firstName: 'Claimant',
-              lastName: 'Two',
-            },
-          },
-        ]);
-
-        messages.find.mockResolvedValue([
-          {
-            content: 'I can collect it tomorrow.',
-            senderId: 2,
-            createdAt: new Date('2026-10-20T11:00:00Z'),
-          },
-        ]);
-
-        messages.count.mockResolvedValue(1);
-
-        const result = await service.getDiscussions(1);
-
-        expect(result.discussions).toHaveLength(1);
-        expect(result.discussions[0]).toMatchObject({
-          discussionId: 1,
-          announcementId: 7,
-          announcementTitle: 'Black phone',
-          otherParticipant: {
-            id: 2,
-            firstName: 'Claimant',
-            lastName: 'Two',
-          },
-          lastMessage: {
-            content: 'I can collect it tomorrow.',
-            senderId: 2,
-          },
-          unreadCount: 1,
-        });
-
-        expect(result.discussions[0]).not.toHaveProperty('description');
-      });
-
-      it('shows the finder to the claimant in the inbox', async () => {
-        discussions.find.mockResolvedValue([
-          {
-            id: 1,
-            announcementId: 7,
-            ownerId: 2,
-            description: 'Private proof description',
-            createdAt: new Date('2026-10-20T10:00:00Z'),
-            announcement: {
-              authorId: 1,
-              title: 'Black phone',
-              author: {
-                id: 1,
-                firstName: 'Finder',
-                lastName: 'One',
-              },
-            },
-            owner: {
-              id: 2,
-              firstName: 'Claimant',
-              lastName: 'Two',
-            },
-          },
-        ]);
-
-        messages.find.mockResolvedValue([]);
-        messages.count.mockResolvedValue(0);
-
-        const result = await service.getDiscussions(2);
-
-        expect(result.discussions[0].otherParticipant).toEqual({
-          id: 1,
-          firstName: 'Finder',
-          lastName: 'One',
-        });
-
-        expect(result.discussions[0].lastMessage).toBeNull();
-        expect(result.discussions[0].unreadCount).toBe(0);
-        expect(result.discussions[0]).not.toHaveProperty('description');
-      });
-
-      it('returns an empty list when the user has no discussions', async () => {
-        discussions.find.mockResolvedValue([]);
-
-        const result = await service.getDiscussions(2);
-
-        expect(result).toEqual({ discussions: [] });
-        expect(messages.find).not.toHaveBeenCalled();
-        expect(messages.count).not.toHaveBeenCalled();
-      });
-    });
-    describe('getAdminStatistics (SCRUM-36)', () => {
-      it('returns zeroed metrics and null average return time when no announcements exist', async () => {
-        announcements.find.mockResolvedValue([]);
-        const stats = await service.getAdminStatistics();
-        expect(stats).toEqual({
-          declaredCount: 0,
-          returnedCount: 0,
-          recoveryRate: 0,
-          averageReturnTimeHours: null,
-          averageReturnTimeDays: null,
-          breakdown: {
-            foundDeclared: 0,
-            lostDeclared: 0,
-            foundReturned: 0,
-            lostReturned: 0,
-            activeCount: 0,
-            closedCount: 0,
-            archivedCount: 0,
-            hiddenCount: 0,
-          },
-        });
-      });
-
-      it('computes declared counts, recovery rate, average return time, and status breakdown', async () => {
-        announcements.find.mockResolvedValue([
-          { id: 1, type: AnnouncementType.Found, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-02T00:00:00Z') },
-          { id: 2, type: AnnouncementType.Lost, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-04T00:00:00Z') },
-          { id: 3, type: AnnouncementType.Found, status: AnnouncementStatus.Available, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
-          { id: 4, type: AnnouncementType.Lost, status: AnnouncementStatus.Closed, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
-          { id: 5, type: AnnouncementType.Found, status: AnnouncementStatus.Deleted, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
-        ]);
-        const stats = await service.getAdminStatistics();
-        expect(stats.declaredCount).toBe(4);
-        expect(stats.returnedCount).toBe(2);
-        expect(stats.recoveryRate).toBe(50);
-        expect(stats.averageReturnTimeHours).toBe(48);
-        expect(stats.averageReturnTimeDays).toBe(2);
-        expect(stats.breakdown).toEqual({
-          foundDeclared: 2,
-          lostDeclared: 2,
-          foundReturned: 1,
-          lostReturned: 1,
-          activeCount: 1,
-          closedCount: 1,
+  describe('getAdminStatistics (SCRUM-36)', () => {
+    it('returns zeroed metrics and null average return time when no announcements exist', async () => {
+      announcements.find.mockResolvedValue([]);
+      const stats = await service.getAdminStatistics();
+      expect(stats).toEqual({
+        declaredCount: 0,
+        returnedCount: 0,
+        recoveryRate: 0,
+        averageReturnTimeHours: null,
+        averageReturnTimeDays: null,
+        breakdown: {
+          foundDeclared: 0,
+          lostDeclared: 0,
+          foundReturned: 0,
+          lostReturned: 0,
+          activeCount: 0,
+          closedCount: 0,
           archivedCount: 0,
           hiddenCount: 0,
-        });
+        },
+      });
+    });
+
+    it('computes declared counts, recovery rate, average return time, and status breakdown', async () => {
+      announcements.find.mockResolvedValue([
+        { id: 1, type: AnnouncementType.Found, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-02T00:00:00Z') },
+        { id: 2, type: AnnouncementType.Lost, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-04T00:00:00Z') },
+        { id: 3, type: AnnouncementType.Found, status: AnnouncementStatus.Available, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+        { id: 4, type: AnnouncementType.Lost, status: AnnouncementStatus.Closed, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+        { id: 5, type: AnnouncementType.Found, status: AnnouncementStatus.Deleted, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
+      ]);
+      const stats = await service.getAdminStatistics();
+      expect(stats.declaredCount).toBe(4);
+      expect(stats.returnedCount).toBe(2);
+      expect(stats.recoveryRate).toBe(50);
+      expect(stats.averageReturnTimeHours).toBe(48);
+      expect(stats.averageReturnTimeDays).toBe(2);
+      expect(stats.breakdown).toEqual({
+        foundDeclared: 2,
+        lostDeclared: 2,
+        foundReturned: 1,
+        lostReturned: 1,
+        activeCount: 1,
+        closedCount: 1,
+        archivedCount: 0,
+        hiddenCount: 0,
       });
     });
   });

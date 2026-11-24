@@ -30,17 +30,13 @@ export class MailService {
     return raw.split(',')[0].trim();
   }
 
-  // SCRUM-32: notify the other participant when a new message is sent.
-  async newMessage(
-    to: string,
-    details: { announcementId: number; announcementTitle: string },
-  ): Promise<void> {
+  // SCRUM-32 (FR-13): sent for the first unread message of a discussion only.
+  async newMessage(to: string, details: { discussionId: number; announcementTitle: string }): Promise<void> {
     const base = this.getClientBaseUrl();
-
     await this.send(
       to,
       'You have a new FindIt message',
-      `${base}/messages`,
+      `${base}/messages?discussionId=${details.discussionId}`,
       `You have received a new message in the discussion about "${details.announcementTitle}". Sign in to FindIt to reply.`,
     );
   }
@@ -124,24 +120,17 @@ export class MailService {
     await this.send(to, 'FindIt found a possible match', `${base}/announcements/${announcement.id}`, intro);
   }
 
-  // Jira task: notify the finder when someone starts a discussion about their found item.
-  async discussionStarted(
-    to: string,
-    announcement: { id: number; title: string },
-  ): Promise<void> {
+  // SCRUM-30 (FR-13 "new discussion"): sent to the author of the announcement.
+  async discussionStarted(to: string, announcement: ConfirmedAnnouncement, discussionId: number): Promise<void> {
     const base = this.getClientBaseUrl();
-
-
-    const intro = `Someone has started a discussion about your found object "${announcement.title}". Sign in to FindIt to review the claim.`;
-
-    await this.send(
-      to,
-      'Someone wants to claim your found object',
-      `${base}/announcements/${announcement.id}`,
-      intro,
-    );
+    const intro =
+      announcement.type === 'found'
+        ? `Someone thinks your found object "${announcement.title}" is theirs and sent a proof. Sign in to FindIt to check it.`
+        : `Someone may have found your lost object "${announcement.title}". Sign in to FindIt to read their message.`;
+    await this.send(to, 'New discussion about your announcement', `${base}/messages?discussionId=${discussionId}`, intro);
   }
-  // SCRUM-32: notify the claimant when the finder confirms the handover.
+
+  // SCRUM-32 (FR-13 "item returned"): sent to the other person when one of them confirms the handover.
   async handover(
     to: string,
     announcement: { id: number; title: string },

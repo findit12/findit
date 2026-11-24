@@ -1,18 +1,13 @@
-
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { apiRequest, photoUrl } from '../api';
-import {
-  Announcement,
-  AnnouncementMatchesResponse,
-  isClosable,
-  isEditable,
-} from '../types/announcement';
+import { Announcement, AnnouncementMatchesResponse, isClosable, isEditable } from '../types/announcement';
+import type { DiscussionsResponse } from '../types/discussion';
 import { useAuth } from '../auth/AuthContext';
 import AnnouncementCard from '../components/AnnouncementCard';
 
 // Detail page of one announcement: /announcements/:id.
-// The hidden detail is never shown here.
+// The hidden detail is never shown here (NFR-PRIV-01).
 export default function AnnouncementDetailPage() {
   const { id } = useParams();
   const location = useLocation();
@@ -24,58 +19,50 @@ export default function AnnouncementDetailPage() {
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [error, setError] = useState('');
   const [matches, setMatches] = useState<Announcement[]>([]);
-  const [discussions, setDiscussions] = useState<
-  { discussionId: number; announcementId: number }[]
->([]);
-  const [handoverError, setHandoverError] = useState('');
-  const [confirmingHandover, setConfirmingHandover] = useState(false);
+  // The id of my discussion about this announcement, if I already started one.
+  const [myDiscussionId, setMyDiscussionId] = useState<number | null>(null);
 
-  // Jira task: proof of ownership and discussion submission.
+  // SCRUM-30: proof written to start a discussion.
   const [proofDescription, setProofDescription] = useState('');
   const [discussionError, setDiscussionError] = useState('');
-  const [discussionNotice, setDiscussionNotice] = useState('');
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
+  // FR-18: report the announcement.
   const [reportReason, setReportReason] = useState('');
   const [reportError, setReportError] = useState('');
   const [reportNotice, setReportNotice] = useState('');
   const [submittingReport, setSubmittingReport] = useState(false);
 
   useEffect(() => {
-  apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
-    .then((data) => setAnnouncement(data.announcement))
-    .catch((err: Error) => setError(err.message));
+    apiRequest<{ announcement: Announcement }>(`/announcements/${id}`)
+      .then((data) => setAnnouncement(data.announcement))
+      .catch((err: Error) => setError(err.message));
 
-  apiRequest<{
-    discussions: { discussionId: number; announcementId: number }[];
-  }>('/announcements/discussions', { token })
-    .then((data) => setDiscussions(data.discussions))
-    .catch(() => setDiscussions([]));
+    apiRequest<AnnouncementMatchesResponse>(`/announcements/${id}/matches`)
+      .then((data) => setMatches(data.matches.map((match) => match.announcement)))
+      .catch(() => setMatches([]));
+  }, [id]);
 
-  apiRequest<AnnouncementMatchesResponse>(`/announcements/${id}/matches`)
-    .then((data) =>
-      setMatches(data.matches.map((match) => match.announcement)),
-    )
-    .catch(() => setMatches([]));
-}, [id, token]);
-
-  async function remove() {
-    if (
-      !announcement ||
-      !window.confirm(
-        `Delete "${announcement.title}"? It will disappear from FindIt.`,
-      )
-    ) {
+  // Only a signed-in user has discussions.
+  useEffect(() => {
+    if (!token) {
+      setMyDiscussionId(null);
       return;
     }
+    apiRequest<DiscussionsResponse>('/conversations', { token })
+      .then((data) => {
+        const mine = data.discussions.find((discussion) => discussion.announcementId === Number(id));
+        setMyDiscussionId(mine ? mine.discussionId : null);
+      })
+      .catch(() => setMyDiscussionId(null));
+  }, [id, token]);
 
+  async function remove() {
+    if (!announcement || !window.confirm(`Delete "${announcement.title}"? It will disappear from FindIt.`)) {
+      return;
+    }
     try {
-      await apiRequest(`/announcements/${announcement.id}`, {
-        method: 'DELETE',
-        token,
-      });
-      navigate('/my-announcements', {
-        state: { notice: 'Announcement deleted.' },
-      });
+      await apiRequest(`/announcements/${announcement.id}`, { method: 'DELETE', token });
+      navigate('/my-announcements', { state: { notice: 'Announcement deleted.' } });
     } catch (err) {
       setError((err as Error).message);
     }
@@ -83,90 +70,35 @@ export default function AnnouncementDetailPage() {
 
   // SCRUM-21: "I got it back" closes a lost announcement.
   async function close() {
-    if (
-      !announcement ||
-      !window.confirm(
-        `Close "${announcement.title}"? Do it once you have your object back.`,
-      )
-    ) {
+    if (!announcement || !window.confirm(`Close "${announcement.title}"? Do it once you have your object back.`)) {
       return;
     }
-
     try {
-      const data = await apiRequest<{ announcement: Announcement }>(
-        `/announcements/${announcement.id}`,
-        {
-          method: 'PATCH',
-          token,
-          body: { status: 'Closed' },
-        },
-      );
+      const data = await apiRequest<{ announcement: Announcement }>(`/announcements/${announcement.id}`, {
+        method: 'PATCH',
+        token,
+        body: { status: 'Closed' },
+      });
       setAnnouncement(data.announcement);
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
-  // Jira task: submit private proof of ownership and start a discussion.
-
-async function confirmHandover() {
-  if (!announcement || !handoverDiscussion || !token) {
-    return;
-  }
-
-  if (
-    !window.confirm(
-      `Confirm that "${announcement.title}" has been handed over to its owner?`,
-    )
-  ) {
-    return;
-  }
-
-  setHandoverError('');
-  setConfirmingHandover(true);
-
-  try {
-    await apiRequest(
-      `/announcements/${announcement.id}/discussions/${handoverDiscussion.discussionId}/return`,
-      {
-        method: 'POST',
-        token,
-      },
-    );
-
-    setAnnouncement({
-      ...announcement,
-      status: 'Returned',
-    });
-  } catch (err) {
-    setHandoverError((err as Error).message);
-  } finally {
-    setConfirmingHandover(false);
-  }
-}
-
+  // SCRUM-30 (FR-11): sends the proof, then opens the new discussion.
   async function startDiscussion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    if (!announcement || !token) {
-      setDiscussionError('Please sign in to start a discussion.');
+    if (!announcement) {
       return;
     }
-
     setDiscussionError('');
-    setDiscussionNotice('');
     setSubmittingDiscussion(true);
-
     try {
-      const data = await apiRequest<{ discussionId: number }>(
-        `/announcements/${announcement.id}/discussions`,
-        {
-          method: 'POST',
-          token,
-          body: { description: proofDescription },
-        },
-      );
-
+      const data = await apiRequest<{ discussionId: number }>('/conversations', {
+        method: 'POST',
+        token,
+        body: { announcementId: announcement.id, description: proofDescription },
+      });
       navigate(`/messages?discussionId=${data.discussionId}`);
     } catch (err) {
       setDiscussionError((err as Error).message);
@@ -177,23 +109,16 @@ async function confirmHandover() {
 
   async function submitReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     const reason = reportReason.trim();
-    if (!announcement || !token || !reason) {
+    if (!announcement || !reason) {
       setReportError('Please enter a reason for reporting this announcement.');
       return;
     }
-
     setReportError('');
     setReportNotice('');
     setSubmittingReport(true);
-
     try {
-      await apiRequest(`/announcements/${announcement.id}/reports`, {
-        method: 'POST',
-        token,
-        body: { reason },
-      });
+      await apiRequest(`/announcements/${announcement.id}/reports`, { method: 'POST', token, body: { reason } });
       setReportReason('');
       setReportNotice('Report submitted successfully for administrator review.');
     } catch (err) {
@@ -215,21 +140,12 @@ async function confirmHandover() {
     return <section className="card">Loading...</section>;
   }
 
-const handoverDiscussion = discussions.find(
-  (discussion) => discussion.announcementId === announcement.id,
-);
-
-const canConfirmHandover =
-  Boolean(token) &&
-  announcement.type === 'found' &&
-  announcement.status === 'Available' &&
-  Boolean(handoverDiscussion);
-
-  const canStartDiscussion =
-    Boolean(token) &&
-    announcement.type === 'found' &&
-    announcement.status === 'Available' &&
-    announcement.authorId !== userId;
+  const isFound = announcement.type === 'found';
+  const isAuthor = announcement.authorId === userId;
+  const atReception = announcement.currentLocation === 'reception';
+  // FR-11: a discussion is possible on a public announcement of someone else, unless the object
+  // is at the reception desk (it is claimed there, FR-16).
+  const canStartDiscussion = Boolean(token) && !isAuthor && isEditable(announcement) && !atReception;
 
   return (
     <section className="card wide-card detail">
@@ -239,12 +155,8 @@ const canConfirmHandover =
         </p>
       )}
 
-      <span className={`badge ${announcement.type}`}>
-        {announcement.type === 'found' ? 'Found' : 'Lost'}
-      </span>
-
+      <span className={`badge ${announcement.type}`}>{isFound ? 'Found' : 'Lost'}</span>
       <h1>{announcement.title}</h1>
-
       <p className="intro">
         {announcement.category.name} · {announcement.objectType.name}
       </p>
@@ -252,11 +164,7 @@ const canConfirmHandover =
       {announcement.photos.length > 0 && (
         <div className="detail-photos">
           {announcement.photos.map((path, index) => (
-            <img
-              key={path}
-              src={photoUrl(path)}
-              alt={`${announcement.title}, photo ${index + 1}`}
-            />
+            <img key={path} src={photoUrl(path)} alt={`${announcement.title}, photo ${index + 1}`} />
           ))}
         </div>
       )}
@@ -265,91 +173,102 @@ const canConfirmHandover =
 
       <dl className="facts">
         <dt>Date</dt>
-        <dd>
-          {new Date(
-            `${announcement.eventDate}T00:00:00`,
-          ).toLocaleDateString()}
-        </dd>
-
+        <dd>{new Date(`${announcement.eventDate}T00:00:00`).toLocaleDateString()}</dd>
         <dt>Place</dt>
         <dd>
           {announcement.place.name}
-          {announcement.placeDetails
-            ? `, ${announcement.placeDetails}`
-            : ''}
+          {announcement.placeDetails ? `, ${announcement.placeDetails}` : ''}
         </dd>
-
         {announcement.brand && (
           <>
             <dt>Brand</dt>
             <dd>{announcement.brand}</dd>
           </>
         )}
-
         {announcement.color && (
           <>
             <dt>Color</dt>
             <dd>{announcement.color}</dd>
           </>
         )}
-
         {announcement.currentLocation && (
           <>
             <dt>Now</dt>
-            <dd>
-              {announcement.currentLocation === 'finder'
-                ? 'Kept by the finder'
-                : 'At the reception desk'}
-            </dd>
+            <dd>{announcement.currentLocation === 'finder' ? 'Kept by the finder' : 'At the reception desk'}</dd>
           </>
         )}
-
         <dt>Status</dt>
         <dd>{announcement.status}</dd>
       </dl>
 
-{/* SCRUM-32: Finder confirms that the item has been handed over. */}
-{canConfirmHandover && (
-  <div className="owner-actions">
-    {handoverError && (
-      <p className="notice error" role="alert">
-        {handoverError}
-      </p>
-    )}
-
-    <button
-      type="button"
-      className="primary"
-      onClick={confirmHandover}
-      disabled={confirmingHandover}
-    >
-      {confirmingHandover
-        ? 'Confirming...'
-        : 'Confirm Handover'}
-    </button>
-  </div>
-)}
-
       {/* Only the author sees these buttons. The server checks it again. */}
-      {announcement.authorId === userId && isEditable(announcement) && (
+      {isAuthor && isEditable(announcement) && (
         <div className="owner-actions">
-          <Link
-            className="secondary button-link"
-            to={`/announcements/${announcement.id}/edit`}
-          >
+          <Link className="secondary button-link" to={`/announcements/${announcement.id}/edit`}>
             Edit
           </Link>
-
           <button className="secondary danger" onClick={remove}>
             Delete
           </button>
-
           {isClosable(announcement) && (
             <button className="primary close-button" onClick={close}>
               I got it back: close the announcement
             </button>
           )}
         </div>
+      )}
+
+      {/* SCRUM-30: my discussion already exists: one per user and announcement. */}
+      {token && !isAuthor && myDiscussionId && (
+        <p className="notice success">
+          You already started a discussion about this announcement.{' '}
+          <Link to={`/messages?discussionId=${myDiscussionId}`}>Open the discussion</Link>
+        </p>
+      )}
+
+      {/* FR-16: an object at the reception desk is claimed there, with the proof. */}
+      {!isAuthor && atReception && isEditable(announcement) && (
+        <p className="notice">
+          This object is kept at the reception desk. To claim it, go to the desk and describe a private detail of the
+          object: the staff will check it.
+        </p>
+      )}
+
+      {/* SCRUM-30 (FR-11): start a discussion with a proof. */}
+      {canStartDiscussion && !myDiscussionId && (
+        <div className="discussion-section">
+          <h2>{isFound ? 'Is it yours?' : 'Did you find it?'}</h2>
+          <p>
+            {isFound
+              ? 'Describe a private detail of the object (a mark, what is inside...). Only the finder reads it, to check that the object is yours.'
+              : 'Describe the object you found, with a detail that shows it is this one. Only the owner reads it.'}
+          </p>
+          {discussionError && (
+            <p className="notice error" role="alert">
+              {discussionError}
+            </p>
+          )}
+          <form onSubmit={startDiscussion}>
+            <label htmlFor="proofDescription">{isFound ? 'Proof of ownership' : 'What you found'}</label>
+            <textarea
+              id="proofDescription"
+              value={proofDescription}
+              onChange={(event) => setProofDescription(event.target.value)}
+              maxLength={1000}
+              rows={5}
+              required
+            />
+            <button className="primary" type="submit" disabled={submittingDiscussion || !proofDescription.trim()}>
+              {submittingDiscussion ? 'Sending...' : 'Start a discussion'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!token && isEditable(announcement) && (
+        <p className="intro">
+          <Link to="/login">Sign in</Link> to contact {isFound ? 'the finder' : 'the owner'}.
+        </p>
       )}
 
       {/* SCRUM-29: up to 4 similar announcements of the opposite type. */}
@@ -364,83 +283,23 @@ const canConfirmHandover =
         </div>
       )}
 
-      {/* Jira task: only another signed-in user can submit a claim. */}
-      {canStartDiscussion && (
-        <div className="discussion-section">
-          <h2>Claim this object</h2>
-
-          <p>
-            Provide a private detail that helps the finder verify that
-            the object belongs to you.
-          </p>
-
-          {discussionNotice && (
-            <p className="notice success" role="status">
-              {discussionNotice}
-            </p>
-          )}
-
-          {discussionError && (
-            <p className="notice error" role="alert">
-              {discussionError}
-            </p>
-          )}
-
-          <form onSubmit={startDiscussion}>
-            <label htmlFor="proofDescription">
-              Proof of ownership
-            </label>
-
-            <textarea
-              id="proofDescription"
-              value={proofDescription}
-              onChange={(event) =>
-                setProofDescription(event.target.value)
-              }
-              placeholder="Describe a unique detail that proves this object belongs to you..."
-              maxLength={1000}
-              rows={5}
-              required
-            />
-
-            <button
-              className="primary"
-              type="submit"
-              disabled={
-                submittingDiscussion || !proofDescription.trim()
-              }
-            >
-              {submittingDiscussion
-                ? 'Submitting...'
-                : 'Start discussion'}
-            </button>
-          </form>
-        </div>
-      )}
-
-      {token && (
+      {/* FR-18: any signed-in user, except the author, can report the announcement. */}
+      {token && !isAuthor && (
         <div className="discussion-section">
           <h2>Report this announcement</h2>
-
-          <p>
-            Let the administrators know why this announcement should be reviewed.
-          </p>
-
+          <p>Let the administrators know why this announcement should be reviewed.</p>
           {reportNotice && (
             <p className="notice success" role="status">
               {reportNotice}
             </p>
           )}
-
           {reportError && (
             <p className="notice error" role="alert">
               {reportError}
             </p>
           )}
-
           <form onSubmit={submitReport}>
             <label htmlFor="reportReason">Reason for report</label>
-
             <textarea
               id="reportReason"
               value={reportReason}
@@ -450,12 +309,7 @@ const canConfirmHandover =
               rows={4}
               required
             />
-
-            <button
-              className="primary"
-              type="submit"
-              disabled={submittingReport || !reportReason.trim()}
-            >
+            <button className="primary" type="submit" disabled={submittingReport || !reportReason.trim()}>
               {submittingReport ? 'Submitting...' : 'Submit report'}
             </button>
           </form>

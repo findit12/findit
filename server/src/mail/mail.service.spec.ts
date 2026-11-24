@@ -51,7 +51,7 @@ describe('MailService', () => {
 
   it('writes a new-message notification email (SCRUM-32)', async () => {
     await service.newMessage('finder@school.edu', {
-      announcementId: 42,
+      discussionId: 42,
       announcementTitle: 'Black phone',
     });
 
@@ -62,7 +62,7 @@ describe('MailService', () => {
 
     expect(html).toContain('You have a new FindIt message');
     expect(html).toContain('Black phone');
-    expect(html).toContain('http://localhost:5173/messages');
+    expect(html).toContain('http://localhost:5173/messages?discussionId=42');
   });
 
   it('retries saving an email preview after a temporary failure (SCRUM-32)', async () => {
@@ -73,7 +73,7 @@ describe('MailService', () => {
 
     try {
       await service.newMessage('finder@school.edu', {
-        announcementId: 42,
+        discussionId: 42,
         announcementTitle: 'Black phone',
       });
 
@@ -107,5 +107,15 @@ describe('MailService', () => {
     expect(html).toContain('FindIt found a possible match');
     expect(html).toContain('A found object may be yours: &quot;Black phone&quot;');
     expect(html).toContain('http://localhost:5173/announcements/45');
+  });
+  it('writes a new-discussion email that links to the discussion (SCRUM-30)', async () => {
+    await service.discussionStarted('finder@school.edu', { id: 7, title: 'Black phone', type: 'found' }, 3);
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const newest = (await readdir(dir)).sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('New discussion about your announcement');
+    expect(html).toContain('http://localhost:5173/messages?discussionId=3');
   });
 });

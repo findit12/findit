@@ -1159,3 +1159,41 @@ main:has(.messages-layout) {
 .similar-grid .gallery-photo {
   height: 120px;
 }
+
+/* ---------- Discussions: proof, handover button, unread badge (SCRUM-30 to SCRUM-32) ---------- */
+
+/* FR-11: the proof that started the discussion, above the messages. */
+.chat-proof {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--framboise);
+  border-radius: 6px 14px 14px 6px;
+  background: var(--rose-pale);
+}
+
+.chat-proof p {
+  margin: 6px 0 4px;
+  white-space: pre-wrap;
+}
+
+/* FR-17: "Confirm handover" / "Mark as recovered" in the header of the conversation. */
+.handover-button {
+  margin-top: 6px;
+  width: auto;
+  padding: 8px 18px;
+}
+
+/* FR-12: number of unread messages next to "Messages" in the header. */
+.unread-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--framboise);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}

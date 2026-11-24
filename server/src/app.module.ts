@@ -19,6 +19,7 @@ import { Discussion } from './discussions/discussion.entity';
 import { Message } from './discussions/message.entity';
 import { Report } from './reports/report.entity';
 import { ReportsModule } from './reports/reports.module';
+import { DiscussionsModule } from './discussions/discussions.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ReportsModule } from './reports/reports.module';
     ReferenceModule,
     AnnouncementsModule,
     SavedSearchesModule,
+    DiscussionsModule,
     ReportsModule,
   ],
 })
