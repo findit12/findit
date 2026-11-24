@@ -22,7 +22,8 @@ export function emptyValues(type: AnnouncementType): AnnouncementFormValues {
     eventDate: today(),
     placeId: '',
     placeDetails: '',
-    currentLocation: '',
+    // NFR-USA-01: "I keep it" is the usual case, so it is preselected to save one interaction.
+    currentLocation: type === 'found' ? 'finder' : '',
     hiddenDetail: '',
   };
 }
