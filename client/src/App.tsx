@@ -12,6 +12,7 @@ import EditAnnouncementPage from './pages/EditAnnouncementPage';
 import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 import MySavedSearchesPage from './pages/MySavedSearchesPage';
 import MessagesPage from './pages/MessagesPage';
+import AccountPage from './pages/AccountPage';
 
 // The admin pages use AG Grid and Highcharts, which are big: they are loaded only when an
 // administrator opens them (React.lazy), so the other pages stay fast.
@@ -85,6 +86,15 @@ export default function App() {
           element={
             <RequireAuth>
               <MySavedSearchesPage />
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/account"
+          element={
+            <RequireAuth>
+              <AccountPage />
             </RequireAuth>
           }
         />

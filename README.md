@@ -80,3 +80,8 @@ For continuous integration with a separate database, set `DATABASE_URL` in your 
 - The GitHub Actions workflow (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint`, `npm run build`, `npm run test:cov --prefix server` and the "no `.js` in the TypeScript sources" check, then uploads `server/coverage` as the `coverage-report` artifact.
 - `postman/FindIt API Postman Collection.json`: Postman collection (v2.1) with tests for the authentication, the gallery, the saved searches CRUD and the admin access control. Import it in Postman, set the collection variables `email` and `password` to a verified student account, start the server (`npm run dev`) and run the collection.
 - `js-practice.js` and `practice/`: JavaScript exercises of Lab 5 adapted to FindIt (`node js-practice.js`, `node practice/main.mjs`). They are exercises outside the application sources.
+
+## Account deletion and usability measure
+
+- **FR-25 / NFR-PRIV-03**: a signed-in user opens "My account" in the header and uses "Delete my account" (with a confirmation step). The account is anonymized, the public announcements are archived, the saved searches are removed and the login is refused.
+- **NFR-USA-01 / TC-NFR-USA-01**: `scripts/count-interactions.mjs` drives the application in a browser from the home page to a submitted declaration and counts the clicks, selections and file choices (typing is not counted). Last measure (after preselecting "I keep it"): lost object 5 interactions (limit 5, met); found object 6 interactions (limit 5, one above): "I found an object", category, precise object, place, one photo, submit. A single grouped object menu (category and precise object in one choice) would bring it to 5.

@@ -88,6 +88,9 @@ export default function Layout() {
                   </Link>
                 </>
               )}
+              <Link className="link-button" to="/account">
+                My account
+              </Link>
               <button className="link-button" onClick={logout}>
                 Sign out
               </button>

@@ -19,6 +19,8 @@ export default tseslint.config(
       // Lab 5 JavaScript exercises, outside the TypeScript source directories.
       'js-practice.js',
       'practice/**',
+      // Measurement script that needs Playwright, which is not a dependency of the project.
+      'scripts/**',
     ],
   },
   js.configs.recommended,
