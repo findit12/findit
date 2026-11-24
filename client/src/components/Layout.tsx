@@ -22,26 +22,42 @@ export default function Layout() {
     <div className="page">
       <header>
         <Link to="/">FindIt</Link>
-        {token && (
-          <nav className="header-links">
-            <Link className="link-button" to="/my-announcements">
-              My announcements
+        <nav className="header-links">
+          {/* SCRUM-22: the gallery is public, so its link is always shown. */}
+          <Link className="link-button" to="/gallery">
+            Browse
+          </Link>
+          {token ? (
+            <>
+              <Link className="link-button" to="/my-announcements">
+                My announcements
+              </Link>
+              <Link className="link-button" to="/saved-searches">
+                Saved searches
+              </Link>
+              <Link className="link-button" to="/messages">
+                Messages
+              </Link>
+              {role === 'admin' && (
+                <>
+                  <Link className="link-button" to="/admin/statistics">
+                    Statistics
+                  </Link>
+                  <Link className="link-button" to="/admin/reports">
+                    Report moderation
+                  </Link>
+                </>
+              )}
+              <button className="link-button" onClick={logout}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link className="link-button" to="/login">
+              Sign in
             </Link>
-            <Link className="link-button" to="/saved-searches">
-              Saved searches
-            </Link>
-            <Link className="link-button" to="/messages">
-              Messages
-            </Link>
-            {role === 'admin' && (
-              <><Link className="link-button" to="/admin/statistics">Statistics</Link><Link className="link-button" to="/admin/reports">
-                Report moderation</Link></>
-            )}
-            <button className="link-button" onClick={logout}>
-              Sign out
-            </button>
-          </nav>
-        )}
+          )}
+        </nav>
       </header>
       <main>
         <Outlet />

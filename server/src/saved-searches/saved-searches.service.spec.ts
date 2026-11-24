@@ -33,6 +33,8 @@ function newAnnouncement(overrides: Partial<NewAnnouncement> = {}): NewAnnouncem
     type: AnnouncementType.Found,
     title: 'Black phone',
     description: 'Found under a table',
+    brand: null,
+    color: null,
     authorId: 1,
     categoryId: 1,
     objectTypeId: 1,
@@ -183,6 +185,18 @@ describe('SavedSearchesService', () => {
       ]);
       await service.notifyMatches(newAnnouncement());
       expect(mail.savedSearchAlert).not.toHaveBeenCalled();
+    });
+
+    it('finds the keyword in the brand and the color too (FR-21)', async () => {
+      searches.find.mockResolvedValue([
+        savedSearch({ id: 1, userId: 5, keyword: 'samsung' }),
+        savedSearch({ id: 2, userId: 6, user: { id: 6, email: 'lea@school.test' } as never, keyword: 'BLACK' }),
+        savedSearch({ id: 3, userId: 7, user: { id: 7, email: 'tom@school.test' } as never, keyword: 'apple' }),
+      ]);
+      await service.notifyMatches(newAnnouncement({ title: 'Phone', brand: 'Samsung', color: 'black' }));
+
+      const recipients = mail.savedSearchAlert.mock.calls.map((call) => call[0]);
+      expect(recipients).toEqual(['sam@school.test', 'lea@school.test']);
     });
 
     it('finds the keyword in the description too, and a date range includes its bounds', async () => {
