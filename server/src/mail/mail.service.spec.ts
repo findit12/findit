@@ -124,6 +124,18 @@ describe('MailService', () => {
     expect(html).toContain('http://localhost:5173/announcements/8');
   });
 
+  it('writes the drop-off email with the announcement link (SCRUM-52)', async () => {
+    await service.droppedAtReception('owner@school.edu', { id: 8, title: 'Black <phone>' });
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const newest = (await readdir(dir)).sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('Your FindIt object is now at the reception');
+    expect(html).toContain('Black &lt;phone&gt;');
+    expect(html).toContain('http://localhost:5173/announcements/8');
+  });
+
   it('writes a new-discussion email that links to the discussion (SCRUM-30)', async () => {
     await service.discussionStarted('finder@school.edu', { id: 7, title: 'Black phone', type: 'found' }, 3);
 

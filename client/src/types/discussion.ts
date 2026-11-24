@@ -24,6 +24,8 @@ export interface Discussion {
   otherParticipant: DiscussionParticipant;
   lastMessage: LastMessage | null;
   unreadCount: number;
+  // FR-14: closed when the finder dropped the object at the reception.
+  closed: boolean;
   createdAt: string;
 }
 
@@ -38,6 +40,8 @@ export interface Message {
   content: string;
   createdAt: string;
   readAt: string | null;
+  // FR-14: written by the system, not by a person.
+  isSystem: boolean;
 }
 
 // The proof written to start the discussion (FR-11): read by the author to check it.

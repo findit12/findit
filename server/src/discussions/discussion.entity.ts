@@ -30,6 +30,10 @@ export class Discussion {
   })
   createdAt!: Date;
 
+  // FR-14: set when the finder drops the object at the reception; no new message after that.
+  @Column({ name: 'closed_at', type: 'timestamptz', nullable: true })
+  closedAt!: Date | null;
+
   @ManyToOne(() => Announcement, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'announcement_id' })
   announcement!: Announcement;

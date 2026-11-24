@@ -1254,3 +1254,12 @@ main:has(.admin-card) {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.86);
 }
+
+/* FR-14: a message written by the system, in the middle of the conversation. */
+.system-message {
+  align-self: center;
+  background: #f3f3f3;
+  color: #555;
+  font-style: italic;
+  text-align: center;
+}
