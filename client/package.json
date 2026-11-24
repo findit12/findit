@@ -9,6 +9,10 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.1.1",
+    "ag-grid-community": "36.2.0",
+    "ag-grid-react": "36.2.0",
+    "highcharts": "12.6.2",
+    "highcharts-react-official": "3.2.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router-dom": "7.18.4",
