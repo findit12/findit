@@ -85,3 +85,7 @@ For continuous integration with a separate database, set `DATABASE_URL` in your 
 
 - **FR-25 / NFR-PRIV-03**: a signed-in user opens "My account" in the header and uses "Delete my account" (with a confirmation step). The account is anonymized, the public announcements are archived, the saved searches are removed and the login is refused.
 - **NFR-USA-01 / TC-NFR-USA-01**: `scripts/count-interactions.mjs` drives the application in a browser from the home page to a submitted declaration and counts the clicks, selections and file choices (typing is not counted). Last measure (after preselecting "I keep it"): lost object 5 interactions (limit 5, met); found object 6 interactions (limit 5, one above): "I found an object", category, precise object, place, one photo, submit. A single grouped object menu (category and precise object in one choice) would bring it to 5.
+
+## DevOps chain
+
+Every change goes through the same chain: a branch named with its Jira key, a commit that starts with the key, a pull request whose title starts with the key, the GitHub Actions checks (lint, build, tests with coverage), and the development panel of the Jira story.
