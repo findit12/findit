@@ -9,7 +9,7 @@ import { AnnouncementMatch } from './announcement-match.entity';
 import { Discussion } from '../discussions/discussion.entity';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ILike, In, IsNull, MoreThanOrEqual, Not } from 'typeorm';
+import { In, IsNull, Not } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -99,9 +99,9 @@ describe('AnnouncementsService', () => {
     create: jest.Mock;
     save: jest.Mock;
     find: jest.Mock;
-    findAndCount: jest.Mock;
     findOne: jest.Mock;
     findOneOrFail: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
 
   let users: { findOneBy: jest.Mock };
@@ -139,9 +139,9 @@ describe('AnnouncementsService', () => {
       create: jest.fn((data) => data),
       save: jest.fn((data) => Promise.resolve({ id: 7, ...data })),
       find: jest.fn(),
-      findAndCount: jest.fn(),
       findOne: jest.fn(),
       findOneOrFail: jest.fn().mockResolvedValue(storedAnnouncement()),
+      createQueryBuilder: jest.fn(),
     };
 
     users = {
@@ -434,246 +434,172 @@ messages = {
     });
   });
 
-  describe('findPublicPage (SCRUM-22)', () => {
-    it('returns the public view of the announcements, never the hidden detail', async () => {
-      announcements.findAndCount.mockResolvedValue([
-        [storedAnnouncement()],
-        1,
-      ]);
+  describe('findPublicPage (SCRUM-22 to SCRUM-25)', () => {
+    // A fake QueryBuilder: every method returns the builder, and getManyAndCount gives the result.
+    // The calls are recorded, so the tests can check the conditions and the order.
+    function fakeSearch(result: [Announcement[], number] = [[], 0]) {
+      const builder: Record<string, jest.Mock> = {};
+      for (const method of ['innerJoinAndSelect', 'where', 'andWhere', 'orderBy', 'addOrderBy', 'setParameter', 'offset', 'limit']) {
+        builder[method] = jest.fn(() => builder);
+      }
+      builder.getManyAndCount = jest.fn().mockResolvedValue(result);
+      announcements.createQueryBuilder.mockReturnValue(builder);
+      return builder;
+    }
+
+    // The conditions written in andWhere, as text.
+    const conditions = (builder: Record<string, jest.Mock>) =>
+      builder.andWhere.mock.calls.map((call) => call[0]).filter((condition) => typeof condition === 'string');
+
+    it('returns 12 public announcements per page, never the hidden detail (FR-27)', async () => {
+      const builder = fakeSearch([[storedAnnouncement()], 1]);
 
       const result = await service.findPublicPage({});
 
-      expect(result.announcements).toHaveLength(1);
-      expect(result.announcements[0]).not.toHaveProperty('hiddenDetail');
-      expect(result.announcements[0].photos).toEqual(['/uploads/a.jpg']);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).not.toHaveProperty('hiddenDetail');
+      expect(result.data[0].photos).toEqual(['/uploads/a.jpg']);
       expect(result.meta).toEqual({
         page: 1,
-        limit: 20,
-        total: 1,
+        pageSize: 12,
+        totalItems: 1,
         totalPages: 1,
+        hasNext: false,
+        hasPrevious: false,
       });
+      expect(builder.offset).toHaveBeenCalledWith(0);
+      expect(builder.limit).toHaveBeenCalledWith(12);
     });
 
-    it('only asks for Available and Open announcements, newest first', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
+    it('only shows Available and Open announcements, newest first, with the id as last criterion', async () => {
+      const builder = fakeSearch();
 
       await service.findPublicPage({});
 
-      const options = announcements.findAndCount.mock.calls[0][0];
-
-      expect(options.where.status).toEqual(
-        In([
-          AnnouncementStatus.Available,
-          AnnouncementStatus.Open,
-        ]),
-      );
-
-      expect(options.order).toEqual({
-        createdAt: 'DESC',
-        id: 'DESC',
+      expect(builder.where).toHaveBeenCalledWith('a.status IN (:...statuses)', {
+        statuses: [AnnouncementStatus.Available, AnnouncementStatus.Open],
       });
-    });
-
-    it('skips the previous pages and counts the total number of pages', async () => {
-      announcements.findAndCount.mockResolvedValue([
-        [storedAnnouncement()],
-        41,
+      expect(builder.orderBy).not.toHaveBeenCalled();
+      expect(builder.addOrderBy.mock.calls).toEqual([
+        ['a.createdAt', 'DESC'],
+        ['a.id', 'DESC'],
       ]);
-
-      const result = await service.findPublicPage({
-        page: 3,
-        limit: 20,
-      });
-
-      const options = announcements.findAndCount.mock.calls[0][0];
-
-      expect(options.skip).toBe(40);
-      expect(options.take).toBe(20);
-      expect(result.meta).toEqual({
-        page: 3,
-        limit: 20,
-        total: 41,
-        totalPages: 3,
-      });
     });
 
-    it('adds one condition for each filter that is sent (SCRUM-23)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
+    it('skips the previous pages and tells if there is a next and a previous page (FR-28)', async () => {
+      const builder = fakeSearch([[storedAnnouncement()], 41]);
+
+      const result = await service.findPublicPage({ page: 3 });
+
+      expect(builder.offset).toHaveBeenCalledWith(24);
+      expect(result.meta).toMatchObject({ page: 3, totalItems: 41, totalPages: 4, hasNext: true, hasPrevious: true });
+    });
+
+    it('adds one condition for each filter that is sent, including the tab (FR-08, FR-09)', async () => {
+      const builder = fakeSearch();
 
       await service.findPublicPage({
+        type: AnnouncementType.Lost,
         categoryId: 1,
         objectTypeId: 2,
         placeId: 3,
         dateFrom: '2026-10-01',
+        dateTo: '2026-10-31',
       });
 
-      const where = announcements.findAndCount.mock.calls[0][0].where;
-
-      expect(where.categoryId).toBe(1);
-      expect(where.objectTypeId).toBe(2);
-      expect(where.placeId).toBe(3);
-      expect(where.eventDate).toEqual(
-        MoreThanOrEqual('2026-10-01'),
-      );
-      expect(where.status).toEqual(
-        In([
-          AnnouncementStatus.Available,
-          AnnouncementStatus.Open,
-        ]),
-      );
+      expect(conditions(builder)).toEqual([
+        'a.type = :type',
+        'a.categoryId = :categoryId',
+        'a.objectTypeId = :objectTypeId',
+        'a.placeId = :placeId',
+        'a.eventDate >= :dateFrom',
+        'a.eventDate <= :dateTo',
+      ]);
+      expect(builder.andWhere).toHaveBeenCalledWith('a.type = :type', { type: AnnouncementType.Lost });
     });
 
     it('does not filter on anything that is not sent', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublicPage({ placeId: 3 });
-
-      const where = announcements.findAndCount.mock.calls[0][0].where;
-
-      expect(where).not.toHaveProperty('categoryId');
-      expect(where).not.toHaveProperty('eventDate');
-    });
-
-    it('searches the keyword in the title and description only (SCRUM-24)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublicPage({
-        q: '  phone  ',
-        placeId: 3,
-      });
-
-      const where = announcements.findAndCount.mock.calls[0][0].where;
-
-      expect(where).toHaveLength(2);
-      expect(where[0].title).toEqual(ILike('%phone%'));
-      expect(where[1].description).toEqual(ILike('%phone%'));
-
-      where.forEach((condition: Record<string, unknown>) => {
-        expect(condition).not.toHaveProperty('brand');
-        expect(condition).not.toHaveProperty('color');
-        expect(condition).not.toHaveProperty('hiddenDetail');
-      });
-
-      where.forEach((condition: Record<string, unknown>) => {
-        expect(condition.placeId).toBe(3);
-        expect(condition.status).toEqual(
-          In([
-            AnnouncementStatus.Available,
-            AnnouncementStatus.Open,
-          ]),
-        );
-      });
-    });
-
-    it('escapes % and _ typed in the keyword', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublicPage({ q: '50%_' });
-
-      const where = announcements.findAndCount.mock.calls[0][0].where;
-
-      expect(where[0].title).toEqual(ILike('%50\\%\\_%'));
-    });
-
-    it('ignores an empty keyword', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
+      const builder = fakeSearch();
       await service.findPublicPage({ q: '   ' });
-
-      const where = announcements.findAndCount.mock.calls[0][0].where;
-
-      expect(Array.isArray(where)).toBe(false);
+      expect(builder.andWhere).not.toHaveBeenCalled();
     });
 
-    it('sorts the oldest first when asked (SCRUM-25)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
+    it('searches the keyword in the title, description, brand and color (FR-21), with % and _ escaped', async () => {
+      const builder = fakeSearch();
 
-      await service.findPublicPage({ sort: 'oldest' });
+      await service.findPublicPage({ q: ' 50%_off ' });
 
-      expect(
-        announcements.findAndCount.mock.calls[0][0].order,
-      ).toEqual({
-        createdAt: 'ASC',
-        id: 'ASC',
-      });
+      const [brackets, parameters] = builder.andWhere.mock.calls[0];
+      expect(parameters).toEqual({ pattern: '%50\\%\\_off%' });
+
+      // Runs the inside of the brackets on a fake "where" to read its conditions.
+      const inner: Record<string, jest.Mock> = {};
+      inner.where = jest.fn(() => inner);
+      inner.orWhere = jest.fn(() => inner);
+      brackets.whereFactory(inner);
+      expect(inner.where).toHaveBeenCalledWith('a.title ILIKE :pattern');
+      expect(inner.orWhere.mock.calls.map((call: string[]) => call[0])).toEqual([
+        'a.description ILIKE :pattern',
+        'a.brand ILIKE :pattern',
+        'a.color ILIKE :pattern',
+      ]);
     });
 
-    it('sorts by event date, the most recent event first (SCRUM-25)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
+    it('sorts by closest date to the chosen date (FR-23)', async () => {
+      const builder = fakeSearch();
 
-      await service.findPublicPage({ sort: 'eventDate' });
+      await service.findPublicPage({ dateFrom: '2026-10-05', sort: 'closestDate' });
 
-      expect(
-        announcements.findAndCount.mock.calls[0][0].order,
-      ).toEqual({
-        eventDate: 'DESC',
-        createdAt: 'DESC',
-        id: 'DESC',
-      });
+      expect(builder.orderBy).toHaveBeenCalledWith('ABS(a.eventDate - CAST(:referenceDate AS date))', 'ASC');
+      expect(builder.setParameter).toHaveBeenCalledWith('referenceDate', '2026-10-05');
+      expect(builder.addOrderBy).toHaveBeenLastCalledWith('a.id', 'DESC');
     });
 
-    it('sorts the newest first when the sort is missing or newest (SCRUM-25)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
-      await service.findPublicPage({});
-      await service.findPublicPage({ sort: 'newest' });
-
-      expect(
-        announcements.findAndCount.mock.calls[0][0].order,
-      ).toEqual({
-        createdAt: 'DESC',
-        id: 'DESC',
-      });
-
-      expect(
-        announcements.findAndCount.mock.calls[1][0].order,
-      ).toEqual({
-        createdAt: 'DESC',
-        id: 'DESC',
-      });
+    it('uses the end date for the closest date when there is no start date', async () => {
+      const builder = fakeSearch();
+      await service.findPublicPage({ dateTo: '2026-10-20', sort: 'closestDate' });
+      expect(builder.setParameter).toHaveBeenCalledWith('referenceDate', '2026-10-20');
     });
 
-    it('checks the filters that are sent with the reference lists (SCRUM-23)', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
+    it('sorts by best match, the title counting more than the rest (FR-23)', async () => {
+      const builder = fakeSearch();
 
-      await service.findPublicPage({
-        categoryId: 1,
-        objectTypeId: 2,
-        placeId: 3,
-      });
+      await service.findPublicPage({ q: 'phone', sort: 'bestMatch' });
 
-      expect(reference.checkFilters).toHaveBeenCalledWith(1, 2, 3);
+      const [expression, direction] = builder.orderBy.mock.calls[0];
+      expect(expression).toContain('a.title ILIKE :pattern THEN 4');
+      expect(expression).toContain('a.description ILIKE :pattern THEN 1');
+      expect(direction).toBe('DESC');
     });
 
-    it('refuses an object that does not belong to the category, before searching (SCRUM-23)', async () => {
+    it('refuses "closest date" without a date and "best match" without a keyword', async () => {
+      fakeSearch();
+      await expect(service.findPublicPage({ sort: 'closestDate' })).rejects.toThrow(
+        'Choose a date to sort by closest date.',
+      );
+      await expect(service.findPublicPage({ sort: 'bestMatch', q: '  ' })).rejects.toThrow(
+        'Type a keyword to sort by best match.',
+      );
+    });
+
+    it('refuses a start date after the end date', async () => {
+      fakeSearch();
+      await expect(service.findPublicPage({ dateFrom: '2026-10-20', dateTo: '2026-10-01' })).rejects.toThrow(
+        'The start date must be before the end date.',
+      );
+    });
+
+    it('checks the filters with the reference lists, before searching (SCRUM-23)', async () => {
+      fakeSearch();
       reference.checkFilters.mockRejectedValue(
-        new BadRequestException(
-          'Choose a precise object that belongs to the selected category.',
-        ),
+        new BadRequestException('Choose a precise object that belongs to the selected category.'),
       );
 
-      await expect(
-        service.findPublicPage({
-          categoryId: 1,
-          objectTypeId: 13,
-        }),
-      ).rejects.toThrow(
+      await expect(service.findPublicPage({ categoryId: 1, objectTypeId: 9 })).rejects.toThrow(
         'Choose a precise object that belongs to the selected category.',
       );
-
-      expect(announcements.findAndCount).not.toHaveBeenCalled();
-    });
-
-    it('uses page 1 and 20 per page by default, and always has at least one page', async () => {
-      announcements.findAndCount.mockResolvedValue([[], 0]);
-
-      const result = await service.findPublicPage({});
-
-      const options = announcements.findAndCount.mock.calls[0][0];
-
-      expect(options.skip).toBe(0);
-      expect(options.take).toBe(20);
-      expect(result.meta.totalPages).toBe(1);
+      expect(reference.checkFilters).toHaveBeenCalledWith(1, 9, undefined);
+      expect(announcements.createQueryBuilder).not.toHaveBeenCalled();
     });
   });
 

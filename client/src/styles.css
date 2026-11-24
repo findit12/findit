@@ -1106,3 +1106,36 @@ main:has(.messages-layout) {
 .stat-label{font-size:.84rem;font-weight:600;color:var(--muted)}
 .stat-value{font-family:var(--font-display);font-size:1.75rem;font-weight:800;color:var(--framboise);line-height:1.15}
 .stat-card small{margin:0;color:var(--muted);font-size:.8rem}
+
+/* ---------- Gallery tabs (FR-08) ---------- */
+
+/* Same look as the tabs of the sign-in page, a little closer to the search box. */
+.gallery-tabs {
+  margin: 18px 0 0;
+  max-width: 420px;
+}
+
+/* ---------- Header on small screens (NFR-USA-02) ---------- */
+
+/* With all the links, the header was wider than a phone screen. Below 900 px, the links go on
+   their own line under the logo, and that line scrolls sideways instead of widening the page. */
+@media (max-width: 900px) {
+  header {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .header-links {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .header-links a,
+  .header-links button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}

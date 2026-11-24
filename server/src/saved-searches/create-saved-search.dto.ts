@@ -37,7 +37,7 @@ export class CreateSavedSearchDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The end date must look like 2026-10-31.' })
   dateTo?: string;
 
-  @ApiPropertyOptional({ example: 'keys', description: 'Keyword searched in the title and description' })
+  @ApiPropertyOptional({ example: 'keys', description: 'Keyword searched in the title, description, brand and color' })
   @IsOptional()
   @MaxLength(100, { message: 'The keyword cannot be more than 100 characters.' })
   @IsString({ message: 'The keyword must be text.' })

@@ -1,12 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
+import { AnnouncementType } from './announcement.entity';
 
-export const DEFAULT_PAGE_SIZE = 20;
-export const MAX_PAGE_SIZE = 50;
+// FR-27: the page size is fixed. The client cannot change it.
+export const PAGE_SIZE = 12;
 
-// Query string of GET /api/announcements (SCRUM-22): ?page=1&limit=20.
-// The filters (SCRUM-23), the keyword (SCRUM-24) and the sort (SCRUM-25) will be added here later.
+// FR-23: the three sort orders of the gallery.
+export const GALLERY_SORTS = ['newest', 'closestDate', 'bestMatch'] as const;
+export type GallerySort = (typeof GALLERY_SORTS)[number];
+
+// Query string of GET /api/announcements, for example:
+// ?type=found&categoryId=1&dateFrom=2026-10-01&q=phone&sort=bestMatch&page=2
+// Every filter is optional and they combine with AND (FR-09).
 // The last decorator written is the one whose message is shown first (see announcements.dto.ts).
 export class ListAnnouncementsQueryDto {
   @ApiPropertyOptional({ example: 1, default: 1, minimum: 1 })
@@ -16,15 +22,12 @@ export class ListAnnouncementsQueryDto {
   @IsInt({ message: 'The page must be a whole number.' })
   page?: number;
 
-  @ApiPropertyOptional({ example: DEFAULT_PAGE_SIZE, default: DEFAULT_PAGE_SIZE, minimum: 1, maximum: MAX_PAGE_SIZE })
+  // FR-08: the "Found objects" and "Lost announcements" tabs.
+  @ApiPropertyOptional({ enum: AnnouncementType, description: 'found or lost (both when missing)' })
   @IsOptional()
-  @Type(() => Number)
-  @Max(MAX_PAGE_SIZE, { message: `The limit cannot be more than ${MAX_PAGE_SIZE}.` })
-  @Min(1, { message: 'The limit must be 1 or more.' })
-  @IsInt({ message: 'The limit must be a whole number.' })
-  limit?: number;
+  @IsEnum(AnnouncementType, { message: 'The type must be found or lost.' })
+  type?: AnnouncementType;
 
-  // SCRUM-23: filters. They can be combined; a missing one means "no filter".
   @ApiPropertyOptional({ example: 1, description: 'Category id' })
   @IsOptional()
   @Type(() => Number)
@@ -56,16 +59,16 @@ export class ListAnnouncementsQueryDto {
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'The end date must look like 2026-10-31.' })
   dateTo?: string;
 
-  // SCRUM-24: keyword searched in the title and description only (never in the hidden detail).
-  @ApiPropertyOptional({ example: 'phone', description: 'Keyword searched in the title and description' })
+  // FR-21: searched in the title, description, brand and color (never in the hidden detail).
+  @ApiPropertyOptional({ example: 'phone', description: 'Keyword searched in the title, description, brand and color' })
   @IsOptional()
   @MaxLength(100, { message: 'The keyword cannot be more than 100 characters.' })
   @IsString({ message: 'The keyword must be text.' })
   q?: string;
 
-  // SCRUM-25: newest = publication date (default), oldest, eventDate = date of the event, most recent first.
-  @ApiPropertyOptional({ enum: ['newest', 'oldest', 'eventDate'], default: 'newest' })
+  // FR-23: newest (default); closestDate needs a date filter; bestMatch needs a keyword.
+  @ApiPropertyOptional({ enum: GALLERY_SORTS, default: 'newest' })
   @IsOptional()
-  @IsIn(['newest', 'oldest', 'eventDate'], { message: 'The sort must be newest, oldest or eventDate.' })
-  sort?: 'newest' | 'oldest' | 'eventDate';
+  @IsIn(GALLERY_SORTS, { message: 'The sort must be newest, closestDate or bestMatch.' })
+  sort?: GallerySort;
 }

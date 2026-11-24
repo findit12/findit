@@ -8,18 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Between,
-  FindOptionsOrder,
-  FindOptionsWhere,
-  ILike,
-  In,
-  IsNull,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Not,
-  Repository,
-} from 'typeorm';
+import { Brackets, In, IsNull, Not, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ReferenceService } from '../reference/reference.service';
@@ -31,10 +20,7 @@ import {
 } from './announcement.entity';
 import { AnnouncementMatch } from './announcement-match.entity';
 import { toOwnerView, toPublicView } from './announcement.views';
-import {
-  DEFAULT_PAGE_SIZE,
-  ListAnnouncementsQueryDto,
-} from './announcements-query.dto';
+import { ListAnnouncementsQueryDto, PAGE_SIZE } from './announcements-query.dto';
 import {
   CreateAnnouncementDto,
   ReplaceAnnouncementDto,
@@ -58,15 +44,6 @@ const GALLERY_STATUSES = [
   AnnouncementStatus.Available,
   AnnouncementStatus.Open,
 ];
-
-const GALLERY_ORDERS: Record<
-  'newest' | 'oldest' | 'eventDate',
-  FindOptionsOrder<Announcement>
-> = {
-  newest: { createdAt: 'DESC', id: 'DESC' },
-  oldest: { createdAt: 'ASC', id: 'ASC' },
-  eventDate: { eventDate: 'DESC', createdAt: 'DESC', id: 'DESC' },
-};
 
 function emptyToNull(value?: string): string | null {
   return value ? value : null;
@@ -658,69 +635,93 @@ export class AnnouncementsService {
     };
   }
 
-  // SCRUM-22: public gallery.
+  // SCRUM-22 to SCRUM-25: public gallery, 12 announcements per page (FR-08, FR-09, FR-21,
+  // FR-23, FR-27). The query is built with the QueryBuilder and bound parameters (:name).
   async findPublicPage(query: ListAnnouncementsQueryDto) {
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || DEFAULT_PAGE_SIZE;
-
-    await this.reference.checkFilters(
-      query.categoryId,
-      query.objectTypeId,
-      query.placeId,
-    );
-
-    const where: FindOptionsWhere<Announcement> = {
-      status: In(GALLERY_STATUSES),
-    };
-
-    if (query.categoryId) where.categoryId = query.categoryId;
-    if (query.objectTypeId) where.objectTypeId = query.objectTypeId;
-    if (query.placeId) where.placeId = query.placeId;
-
-    if (query.dateFrom && query.dateTo) {
-      where.eventDate = Between(query.dateFrom, query.dateTo);
-    } else if (query.dateFrom) {
-      where.eventDate = MoreThanOrEqual(query.dateFrom);
-    } else if (query.dateTo) {
-      where.eventDate = LessThanOrEqual(query.dateTo);
-    }
-
+    const page = query.page ?? 1;
+    const sort = query.sort ?? 'newest';
     const keyword = (query.q ?? '').trim();
 
-    let conditions:
-      | FindOptionsWhere<Announcement>
-      | FindOptionsWhere<Announcement>[] = where;
-
-    if (keyword) {
-      const pattern =
-        '%' + keyword.replace(/[\\%_]/g, '\\$&') + '%';
-
-      conditions = [
-        { ...where, title: ILike(pattern) },
-        { ...where, description: ILike(pattern) },
-      ];
+    // FR-23: "closest date" needs a date, "best match" needs a keyword.
+    if (sort === 'closestDate' && !query.dateFrom && !query.dateTo) {
+      throw new BadRequestException('Choose a date to sort by closest date.');
+    }
+    if (sort === 'bestMatch' && !keyword) {
+      throw new BadRequestException('Type a keyword to sort by best match.');
+    }
+    if (query.dateFrom && query.dateTo && query.dateFrom > query.dateTo) {
+      throw new BadRequestException('The start date must be before the end date.');
     }
 
-    const [announcements, total] =
-      await this.announcements.findAndCount({
-        where: conditions,
-        relations: {
-          category: true,
-          objectType: true,
-          place: true,
-        },
-        order: GALLERY_ORDERS[query.sort ?? 'newest'],
-        skip: (page - 1) * limit,
-        take: limit,
-      });
+    await this.reference.checkFilters(query.categoryId, query.objectTypeId, query.placeId);
 
+    const search = this.announcements
+      .createQueryBuilder('a')
+      .innerJoinAndSelect('a.category', 'category')
+      .innerJoinAndSelect('a.objectType', 'objectType')
+      .innerJoinAndSelect('a.place', 'place')
+      .where('a.status IN (:...statuses)', { statuses: GALLERY_STATUSES });
+
+    // FR-09: every filter that is sent is added with AND.
+    if (query.type) search.andWhere('a.type = :type', { type: query.type });
+    if (query.categoryId) search.andWhere('a.categoryId = :categoryId', { categoryId: query.categoryId });
+    if (query.objectTypeId) search.andWhere('a.objectTypeId = :objectTypeId', { objectTypeId: query.objectTypeId });
+    if (query.placeId) search.andWhere('a.placeId = :placeId', { placeId: query.placeId });
+    if (query.dateFrom) search.andWhere('a.eventDate >= :dateFrom', { dateFrom: query.dateFrom });
+    if (query.dateTo) search.andWhere('a.eventDate <= :dateTo', { dateTo: query.dateTo });
+
+    // FR-21: the keyword can be in the title, the description, the brand or the color.
+    // % and _ typed by the user are escaped, so they are searched as normal characters.
+    if (keyword) {
+      search.andWhere(
+        new Brackets((where) => {
+          where
+            .where('a.title ILIKE :pattern')
+            .orWhere('a.description ILIKE :pattern')
+            .orWhere('a.brand ILIKE :pattern')
+            .orWhere('a.color ILIKE :pattern');
+        }),
+        { pattern: '%' + keyword.replace(/[\\%_]/g, '\\$&') + '%' },
+      );
+    }
+
+    // FR-23 and SCRUM-25 "stable sort": the last criterion is always the id, which is unique,
+    // so two pages never show the same announcement twice.
+    if (sort === 'closestDate') {
+      // Number of days between the event and the chosen date (the start date, or the end date).
+      search
+        .orderBy('ABS(a.eventDate - CAST(:referenceDate AS date))', 'ASC')
+        .setParameter('referenceDate', query.dateFrom ?? query.dateTo);
+    } else if (sort === 'bestMatch') {
+      // A keyword found in the title counts more than one found in the brand, color or description.
+      search.orderBy(
+        '(CASE WHEN a.title ILIKE :pattern THEN 4 ELSE 0 END)' +
+          ' + (CASE WHEN a.brand ILIKE :pattern THEN 2 ELSE 0 END)' +
+          ' + (CASE WHEN a.color ILIKE :pattern THEN 2 ELSE 0 END)' +
+          ' + (CASE WHEN a.description ILIKE :pattern THEN 1 ELSE 0 END)',
+        'DESC',
+      );
+    }
+    search.addOrderBy('a.createdAt', 'DESC').addOrderBy('a.id', 'DESC');
+
+    // offset/limit (and not skip/take): the joins are many-to-one, so one row = one announcement.
+    const [announcements, totalItems] = await search
+      .offset((page - 1) * PAGE_SIZE)
+      .limit(PAGE_SIZE)
+      .getManyAndCount();
+
+    const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+    // SDD section 5: "data" (at most 12 items) and "meta".
     return {
-      announcements: announcements.map(toPublicView),
+      data: announcements.map(toPublicView),
       meta: {
         page,
-        limit,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
+        pageSize: PAGE_SIZE,
+        totalItems,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1,
       },
     };
   }

@@ -10,12 +10,22 @@ import { SavedSearch } from './saved-search.entity';
 // What a saved search needs to know about a new announcement.
 type MatchableAnnouncement = Pick<
   Announcement,
-  'id' | 'type' | 'title' | 'description' | 'authorId' | 'categoryId' | 'objectTypeId' | 'placeId' | 'eventDate'
+  | 'id'
+  | 'type'
+  | 'title'
+  | 'description'
+  | 'brand'
+  | 'color'
+  | 'authorId'
+  | 'categoryId'
+  | 'objectTypeId'
+  | 'placeId'
+  | 'eventDate'
 >;
 
 // Same rules as the gallery (SCRUM-23, SCRUM-24): every criterion that is filled in must match.
-// The keyword is searched in the title and the description, whatever the case. The hidden detail
-// is never used.
+// The keyword is searched in the title, description, brand and color, whatever the case (FR-21).
+// The hidden detail is never used.
 function matches(search: SavedSearch, announcement: MatchableAnnouncement): boolean {
   if (search.categoryId && search.categoryId !== announcement.categoryId) return false;
   if (search.objectTypeId && search.objectTypeId !== announcement.objectTypeId) return false;
@@ -24,9 +34,8 @@ function matches(search: SavedSearch, announcement: MatchableAnnouncement): bool
   if (search.dateTo && announcement.eventDate > search.dateTo) return false;
   if (search.keyword) {
     const keyword = search.keyword.toLowerCase();
-    const inTitle = announcement.title.toLowerCase().includes(keyword);
-    const inDescription = announcement.description.toLowerCase().includes(keyword);
-    if (!inTitle && !inDescription) return false;
+    const texts = [announcement.title, announcement.description, announcement.brand, announcement.color];
+    if (!texts.some((text) => (text ?? '').toLowerCase().includes(keyword))) return false;
   }
   return true;
 }
