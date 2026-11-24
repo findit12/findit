@@ -1,233 +1,198 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { ApiError, apiRequest } from '../api';
 import { useAuth } from '../auth/AuthContext';
+import AdminGrid from '../components/AdminGrid';
 
+// A row of the moderation queue (GET /api/reports/admin/queue).
 interface Report {
   id: number;
   reason: string;
   status: string;
   createdAt: string;
-  announcement: {
-    id: number;
-    title: string;
-    type: string;
-    status: string;
-    authorId: number;
-  };
-  reporter: {
-    id: number;
-    email: string;
-    firstName: string;
-    lastName: string;
-  };
+  announcement: { id: number; title: string; type: string; status: string; authorId: number };
+  reporter: { id: number; email: string; firstName: string | null; lastName: string | null };
 }
 
+// A hidden announcement (GET /api/reports/admin/announcements/hidden).
+interface HiddenAnnouncement {
+  id: number;
+  title: string;
+  type: string;
+  authorId: number;
+  createdAt: string;
+}
+
+// UC-4 and FR-19: the moderation queue and the hidden announcements, in AG Grid tables.
 export default function AdminReportsPage() {
   const { token, signOut } = useAuth();
-  const [reports, setReports] = useState<Report[] | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [hidden, setHidden] = useState<HiddenAnnouncement[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [busyId, setBusyId] = useState<number | null>(null);
 
-  useEffect(() => {
-    let active = true;
-
-    apiRequest<Report[]>('/reports/admin/queue', { token })
-      .then((data) => {
-        if (active) setReports(data);
-      })
-      .catch((err: ApiError) => {
-        if (!active) return;
-        if (err.status === 401) signOut();
-        setError(err.message);
-      });
-
-    return () => {
-      active = false;
-    };
+  const load = useCallback(async () => {
+    try {
+      const [queue, hiddenList] = await Promise.all([
+        apiRequest<Report[]>('/reports/admin/queue', { token }),
+        apiRequest<HiddenAnnouncement[]>('/reports/admin/announcements/hidden', { token }),
+      ]);
+      setReports(queue);
+      setHidden(hiddenList);
+    } catch (err) {
+      if ((err as ApiError).status === 401) signOut();
+      setError((err as Error).message);
+    }
   }, [token, signOut]);
 
-  async function handleAction(
-    report: Report,
-    path: string,
-    method: 'PATCH' | 'DELETE',
-    confirmText: string,
-    successText: string,
-    removeByAnnouncement = true,
-  ) {
-    if (!window.confirm(confirmText)) return;
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-    setError('');
-    setSuccess('');
-    setBusyId(report.id);
+  // Every action asks for a confirmation, calls the API, then reloads both tables.
+  const act = useCallback(
+    async (path: string, method: 'PATCH' | 'DELETE', question: string, done: string) => {
+      if (!window.confirm(question)) return;
+      setError('');
+      setSuccess('');
+      try {
+        await apiRequest(path, { method, token });
+        setSuccess(done);
+        await load();
+      } catch (err) {
+        if ((err as ApiError).status === 401) signOut();
+        setError((err as Error).message);
+      }
+    },
+    [token, signOut, load],
+  );
 
-    try {
-      await apiRequest(path, { method, token });
-      setReports((current) =>
-        current
-          ? current.filter((item) =>
-              removeByAnnouncement
-                ? item.announcement.id !== report.announcement.id
-                : item.id !== report.id,
-            )
-          : current,
-      );
-      setSuccess(successText);
-    } catch (err) {
-      const apiErr = err as ApiError;
-      if (apiErr.status === 401) signOut();
-      setError(apiErr.message || 'Moderation action failed.');
-    } finally {
-      setBusyId(null);
-    }
-  }
+  const reportColumns = useMemo<ColDef<Report>[]>(
+    () => [
+      { headerName: '#', field: 'id', maxWidth: 80 },
+      {
+        headerName: 'Announcement',
+        valueGetter: (p) => p.data?.announcement.title,
+        cellRenderer: (p: ICellRendererParams<Report>) =>
+          p.data ? <Link to={`/announcements/${p.data.announcement.id}`}>{p.data.announcement.title}</Link> : null,
+        minWidth: 160,
+      },
+      { headerName: 'Type', valueGetter: (p) => p.data?.announcement.type, maxWidth: 100 },
+      { headerName: 'Reason', field: 'reason', minWidth: 200, tooltipField: 'reason' },
+      {
+        headerName: 'Reported by',
+        valueGetter: (p) => `${p.data?.reporter.firstName ?? ''} ${p.data?.reporter.lastName ?? ''}`.trim(),
+      },
+      {
+        headerName: 'Date',
+        field: 'createdAt',
+        filter: 'agDateColumnFilter',
+        valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleString() : ''),
+      },
+      {
+        headerName: 'Actions',
+        sortable: false,
+        filter: false,
+        minWidth: 330,
+        cellRenderer: (p: ICellRendererParams<Report>) => {
+          const r = p.data;
+          if (!r) return null;
+          return (
+            <div className="grid-actions">
+              <button
+                onClick={() =>
+                  act(`/reports/admin/announcements/${r.announcement.id}/hide`, 'PATCH', 'Hide this announcement?', 'Announcement hidden.')
+                }
+              >
+                Hide
+              </button>
+              <button
+                className="danger"
+                onClick={() =>
+                  act(`/reports/admin/announcements/${r.announcement.id}`, 'DELETE', 'Delete this announcement? It disappears from FindIt.', 'Announcement deleted.')
+                }
+              >
+                Delete
+              </button>
+              <button
+                className="danger"
+                onClick={() =>
+                  act(`/reports/admin/users/${r.announcement.authorId}/block`, 'PATCH', 'Block the author of this announcement?', 'User blocked.')
+                }
+              >
+                Block author
+              </button>
+              <button onClick={() => act(`/reports/admin/${r.id}`, 'DELETE', 'Dismiss this report?', 'Report dismissed.')}>
+                Dismiss
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [act],
+  );
+
+  const hiddenColumns = useMemo<ColDef<HiddenAnnouncement>[]>(
+    () => [
+      { headerName: '#', field: 'id', maxWidth: 80 },
+      { headerName: 'Title', field: 'title' },
+      { headerName: 'Type', field: 'type', maxWidth: 110 },
+      { headerName: 'Author', field: 'authorId', maxWidth: 110 },
+      {
+        headerName: 'Declared on',
+        field: 'createdAt',
+        filter: 'agDateColumnFilter',
+        valueFormatter: (p) => (p.value ? new Date(p.value).toLocaleDateString() : ''),
+      },
+      {
+        headerName: 'Actions',
+        sortable: false,
+        filter: false,
+        minWidth: 190,
+        cellRenderer: (p: ICellRendererParams<HiddenAnnouncement>) => {
+          const a = p.data;
+          if (!a) return null;
+          return (
+            <div className="grid-actions">
+              <button onClick={() => act(`/reports/admin/announcements/${a.id}/restore`, 'PATCH', 'Make this announcement visible again?', 'Announcement restored.')}>
+                Restore
+              </button>
+              <button
+                className="danger"
+                onClick={() => act(`/reports/admin/announcements/${a.id}`, 'DELETE', 'Delete this announcement?', 'Announcement deleted.')}
+              >
+                Delete
+              </button>
+            </div>
+          );
+        },
+      },
+    ],
+    [act],
+  );
 
   return (
-    <section className="card wide-card">
+    <section className="card admin-card">
       <h1>Report moderation</h1>
-
-      <p className="intro">
-        Review announcements reported by users.
-      </p>
-
+      <p className="intro">Review the reported announcements. Every action is written in the audit trail.</p>
       {error && (
         <p className="notice error" role="alert">
           {error}
         </p>
       )}
-
       {success && (
         <p className="notice success" role="status">
           {success}
         </p>
       )}
 
-      {reports === null && !error && (
-        <p className="intro">Loading reports...</p>
-      )}
+      <h2>Pending reports</h2>
+      <AdminGrid rows={reports} columns={reportColumns} emptyText="There are no pending reports." />
 
-      {reports && reports.length === 0 && (
-        <p className="intro">There are no pending reports.</p>
-      )}
-
-      {reports && reports.length > 0 && (
-        <ul className="my-list">
-          {reports.map((report) => (
-            <li key={report.id}>
-              <div>
-                <div className="my-labels">
-                  <span className="badge">Report #{report.id}</span>
-                  <span className="status">{report.status}</span>
-                </div>
-
-                <h2>Reason for report</h2>
-                <p>{report.reason}</p>
-
-                <h3>Announcement</h3>
-                <Link
-                  className="my-title"
-                  to={`/announcements/${report.announcement.id}`}
-                >
-                  {report.announcement.title}
-                </Link>
-                <small>
-                  {report.announcement.type} · {report.announcement.status} · Author #{report.announcement.authorId}
-                </small>
-
-                <h3>Reported by</h3>
-                <p>
-                  {report.reporter.firstName} {report.reporter.lastName}
-                </p>
-                <small>{report.reporter.email}</small>
-
-                <p>
-                  <small>
-                    Submitted: {new Date(report.createdAt).toLocaleString()}
-                  </small>
-                </p>
-
-                <div className="owner-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busyId === report.id}
-                    onClick={() =>
-                      handleAction(
-                        report,
-                        `/reports/admin/announcements/${report.announcement.id}/hide` ,
-                        'PATCH',
-                        'Hide this announcement from public views?',
-                        'Announcement hidden.',
-                      )
-                    }
-                  >
-                    Hide announcement
-                  </button>
-
-                  <button
-                    type="button"
-                    className="secondary danger"
-                    disabled={busyId === report.id}
-                    onClick={() =>
-                      handleAction(
-                        report,
-                        `/reports/admin/announcements/${report.announcement.id}`,
-                        'DELETE',
-                        'Permanently remove this announcement from the platform?',
-                        'Announcement deleted.',
-                      )
-                    }
-                  >
-                    Delete announcement
-                  </button>
-
-                  <button
-                    type="button"
-                    className="secondary danger"
-                    disabled={busyId === report.id}
-                    onClick={() =>
-                      handleAction(
-                        report,
-                        `/reports/admin/users/${report.announcement.authorId}/block`,
-                        'PATCH',
-                        'Block the author of this announcement and revoke their session?',
-                        'User account blocked.',
-                        false,
-                      )
-                    }
-                  >
-                    Block user
-                  </button>
-
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busyId === report.id}
-                    onClick={() =>
-                      handleAction(
-                        report,
-                        `/reports/admin/${report.id}` ,
-                        'DELETE',
-                        'Dismiss this report?',
-                        'Report dismissed.',
-                        false,
-                      )
-                    }
-                  >
-                    Dismiss report
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      <p>
-        <Link className="secondary button-link" to="/gallery">
-          Back to gallery
-        </Link>
-      </p>
+      <h2>Hidden announcements</h2>
+      <AdminGrid rows={hidden} columns={hiddenColumns} emptyText="No announcement is hidden." />
     </section>
   );
 }

@@ -1,6 +1,8 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import RequireAuth from './components/RequireAuth';
+import RequireAdmin from './components/RequireAdmin';
 import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import GalleryPage from './pages/GalleryPage';
@@ -10,8 +12,23 @@ import EditAnnouncementPage from './pages/EditAnnouncementPage';
 import MyAnnouncementsPage from './pages/MyAnnouncementsPage';
 import MySavedSearchesPage from './pages/MySavedSearchesPage';
 import MessagesPage from './pages/MessagesPage';
-import AdminReportsPage from './pages/AdminReportsPage';
-import AdminStatsPage from './pages/AdminStatsPage';
+
+// The admin pages use AG Grid and Highcharts, which are big: they are loaded only when an
+// administrator opens them (React.lazy), so the other pages stay fast.
+const AdminReportsPage = lazy(() => import('./pages/AdminReportsPage'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage'));
+const AdminStatsPage = lazy(() => import('./pages/AdminStatsPage'));
+
+// FR-19: signed in, administrator, then the page once its code is loaded.
+function AdminRoute({ children }: { children: ReactNode }) {
+  return (
+    <RequireAuth>
+      <RequireAdmin>
+        <Suspense fallback={<section className="card">Loading...</section>}>{children}</Suspense>
+      </RequireAdmin>
+    </RequireAuth>
+  );
+}
 
 // List of the pages of the site: which address shows which component.
 export default function App() {
@@ -71,12 +88,27 @@ export default function App() {
         />
 
         <Route
-          path="/admin/statistics" element={<RequireAuth><AdminStatsPage /></RequireAuth>} />
-        <Route path="/admin/reports"
+          path="/admin/statistics"
           element={
-            <RequireAuth>
+            <AdminRoute>
+              <AdminStatsPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <AdminRoute>
               <AdminReportsPage />
-            </RequireAuth>
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute>
+              <AdminUsersPage />
+            </AdminRoute>
           }
         />
 

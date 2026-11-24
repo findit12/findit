@@ -75,7 +75,10 @@ export default function Layout() {
                     Statistics
                   </Link>
                   <Link className="link-button" to="/admin/reports">
-                    Report moderation
+                    Moderation
+                  </Link>
+                  <Link className="link-button" to="/admin/users">
+                    Users
                   </Link>
                 </>
               )}

@@ -1197,3 +1197,60 @@ main:has(.messages-layout) {
   font-size: 0.72rem;
   font-weight: 700;
 }
+
+/* ---------- Admin pages: AG Grid tables and Highcharts charts (FR-19) ---------- */
+
+/* The admin pages use the whole width, like the gallery. */
+main:has(.admin-card) {
+  width: min(100% - 32px, 1160px);
+}
+
+.admin-card {
+  max-width: none;
+}
+
+.admin-card h2 {
+  margin: 26px 0 10px;
+  font-size: 1.2rem;
+}
+
+.admin-grid {
+  width: 100%;
+}
+
+/* The buttons inside a table row. */
+.grid-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  height: 100%;
+}
+
+.grid-actions button {
+  padding: 4px 10px;
+  border: 1px solid var(--rose-ligne);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--bordeaux);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.grid-actions button.danger {
+  color: var(--framboise);
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.chart-box {
+  padding: 10px;
+  border: 1px solid var(--rose-ligne);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+}
