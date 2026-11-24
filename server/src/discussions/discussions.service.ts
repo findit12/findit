@@ -13,6 +13,7 @@ import {
   AnnouncementType,
   CurrentLocation,
 } from '../announcements/announcement.entity';
+import { DailyLimitsService } from '../limits/daily-limits.service';
 import { MailService } from '../mail/mail.service';
 import { User } from '../users/user.entity';
 import { CreateDiscussionDto } from './create-discussion.dto';
@@ -42,6 +43,7 @@ export class DiscussionsService {
     @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly mail: MailService,
+    private readonly limits: DailyLimitsService,
   ) {}
 
   // SCRUM-30 (FR-11): start a discussion from an announcement page, with a proof.
@@ -76,6 +78,9 @@ export class DiscussionsService {
         discussionId: existing.id,
       });
     }
+
+    // FR-31: 20 new discussions per day for a student (429 beyond).
+    await this.limits.assertCanStartDiscussion(userId);
 
     const discussion = await this.discussions.save(
       this.discussions.create({ announcementId: announcement.id, ownerId: userId, description: dto.description }),

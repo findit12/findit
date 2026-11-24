@@ -1,4 +1,5 @@
 
+import { DailyLimitsService } from '../limits/daily-limits.service';
 import {
   BadRequestException,
   ConflictException,
@@ -72,6 +73,7 @@ export class AnnouncementsService {
     private readonly mail: MailService,
     private readonly savedSearches: SavedSearchesService,
     private readonly matching: MatchingService,
+    private readonly limits: DailyLimitsService,
   ) {}
 
   // SCRUM-16 and SCRUM-20: create a found or lost announcement.
@@ -85,6 +87,9 @@ export class AnnouncementsService {
     if (!author) {
       throw new NotFoundException('User not found.');
     }
+
+    // FR-31: 10 announcements per day for a student (429 beyond).
+    await this.limits.assertCanDeclare(authorId);
 
     const isFound = dto.type === AnnouncementType.Found;
 
