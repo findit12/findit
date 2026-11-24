@@ -22,10 +22,13 @@ import { AuditLog } from './reports/audit-log.entity';
 import { ReportsModule } from './reports/reports.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 import { LimitsModule } from './limits/limits.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
@@ -54,6 +57,7 @@ import { LimitsModule } from './limits/limits.module';
     DiscussionsModule,
     ReportsModule,
     LimitsModule,
+    SchedulerModule,
   ],
 })
 export class AppModule {}

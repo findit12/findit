@@ -1,7 +1,8 @@
 import { randomBytes } from 'crypto';
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
+import { Announcement, AnnouncementStatus } from '../announcements/announcement.entity';
 import { AuthToken } from '../auth/auth-token.entity';
 import { SavedSearch } from '../saved-searches/saved-search.entity';
 import { UpdateUserDto } from './update-user.dto';
@@ -15,6 +16,7 @@ export class UsersService {
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectRepository(AuthToken) private readonly tokens: Repository<AuthToken>,
     @InjectRepository(SavedSearch) private readonly savedSearches: Repository<SavedSearch>,
+    @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
   ) {}
 
   // The password hash is never sent.
@@ -83,5 +85,10 @@ export class UsersService {
 
     await this.tokens.delete({ user: { id } });
     await this.savedSearches.delete({ userId: id });
+    // FR-25: the announcements of the user that are still public are archived.
+    await this.announcements.update(
+      { authorId: id, status: In([AnnouncementStatus.Available, AnnouncementStatus.Open]) },
+      { status: AnnouncementStatus.Archived },
+    );
   }
 }

@@ -108,6 +108,22 @@ describe('MailService', () => {
     expect(html).toContain('A found object may be yours: &quot;Black phone&quot;');
     expect(html).toContain('http://localhost:5173/announcements/45');
   });
+  it('writes the archive reminder with the date and the link (SCRUM-51)', async () => {
+    await service.archiveReminder(
+      'author@school.edu',
+      { id: 8, title: 'Black phone', type: 'found' },
+      new Date('2026-12-30T10:00:00Z'),
+    );
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const newest = (await readdir(dir)).sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('Your FindIt announcement will be archived soon');
+    expect(html).toContain('will be archived on 2026-12-30');
+    expect(html).toContain('http://localhost:5173/announcements/8');
+  });
+
   it('writes a new-discussion email that links to the discussion (SCRUM-30)', async () => {
     await service.discussionStarted('finder@school.edu', { id: 7, title: 'Black phone', type: 'found' }, 3);
 
