@@ -522,7 +522,8 @@ export class AnnouncementsService {
     await this.announcements.save(columns);
   }
 
-  // SCRUM-36: Platform-wide recovery metrics for the admin statistics dashboard.
+  // SCRUM-36 (FR-19): recovery statistics of the admin dashboard: declared, returned, recovery
+  // rate, average return time, registered accounts, and the last 6 months for the Highcharts chart.
   async getAdminStatistics() {
     const all = await this.announcements.find({
       select: {
@@ -533,6 +534,7 @@ export class AnnouncementsService {
         returnedAt: true,
       },
     });
+    const registeredAccounts = await this.users.count();
 
     const declared = all.filter((a) => a.status !== AnnouncementStatus.Deleted);
     const declaredCount = declared.length;
@@ -557,12 +559,28 @@ export class AnnouncementsService {
       averageReturnTimeDays = Math.round((hours / 24) * 10) / 10;
     }
 
+    // "Declared vs returned per month" (SDD 3.4): the current month and the 5 before, as "YYYY-MM".
+    const now = new Date();
+    const months: string[] = [];
+    for (let back = 5; back >= 0; back--) {
+      const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1));
+      months.push(day.toISOString().slice(0, 7));
+    }
+    const monthOf = (date: Date | null) => (date ? new Date(date).toISOString().slice(0, 7) : '');
+    const monthly = months.map((month) => ({
+      month,
+      declared: declared.filter((a) => monthOf(a.createdAt) === month).length,
+      returned: returned.filter((a) => monthOf(a.returnedAt) === month).length,
+    }));
+
     return {
       declaredCount,
       returnedCount,
       recoveryRate,
       averageReturnTimeHours,
       averageReturnTimeDays,
+      registeredAccounts,
+      monthly,
       breakdown: {
         foundDeclared: declared.filter((a) => a.type === AnnouncementType.Found).length,
         lostDeclared: declared.filter((a) => a.type === AnnouncementType.Lost).length,

@@ -1,35 +1,37 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
-
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Announcement, AnnouncementStatus } from '../announcements/announcement.entity';
+import { Announcement, AnnouncementStatus, AnnouncementType } from '../announcements/announcement.entity';
 import { User, UserRole, UserStatus } from '../users/user.entity';
-import { Report, ReportStatus } from './report.entity';
+import { AuditAction, AuditLog, AuditTarget } from './audit-log.entity';
 import { CreateReportDto } from './create-report.dto';
+import { Report, ReportStatus } from './report.entity';
+
+// SDD section 4 "Transitions": an administrator can hide an active announcement, restore it, and
+// delete it while it is active or hidden. Returned, Closed, Deleted and Archived are final: 409.
+const ACTIVE_STATUSES = [AnnouncementStatus.Available, AnnouncementStatus.Open];
 
 @Injectable()
 export class ReportsService {
   constructor(
-    @InjectRepository(Report)
-    private readonly reports: Repository<Report>,
-    @InjectRepository(Announcement)
-    private readonly announcements: Repository<Announcement>,
-    @InjectRepository(User)
-    private readonly users: Repository<User>,
+    @InjectRepository(Report) private readonly reports: Repository<Report>,
+    @InjectRepository(Announcement) private readonly announcements: Repository<Announcement>,
+    @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(AuditLog) private readonly auditLogs: Repository<AuditLog>,
   ) {}
 
+  // FR-18: report an announcement with a reason.
   async createReport(announcementId: number, reporterId: number, dto: CreateReportDto) {
     const announcement = await this.announcements.findOne({
-
       where: { id: announcementId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, authorId: true },
     });
-
     if (
       !announcement ||
       announcement.status === AnnouncementStatus.Deleted ||
@@ -37,24 +39,22 @@ export class ReportsService {
     ) {
       throw new NotFoundException('Announcement not found.');
     }
+    if (announcement.authorId === reporterId) {
+      throw new ForbiddenException('You cannot report your own announcement.');
+    }
+    // One pending report per user and announcement: the queue is not flooded by the same person.
+    const pending = await this.reports.findOneBy({ announcementId, reporterId, status: ReportStatus.Pending });
+    if (pending) {
+      throw new ConflictException('You already reported this announcement.');
+    }
 
     const report = await this.reports.save(
-      this.reports.create({
-        announcementId,
-        reporterId,
-        reason: dto.reason,
-        status: ReportStatus.Pending,
-      }),
+      this.reports.create({ announcementId, reporterId, reason: dto.reason, status: ReportStatus.Pending }),
     );
-
-    return {
-      id: report.id,
-      announcementId: report.announcementId,
-      status: report.status,
-      createdAt: report.createdAt,
-    };
+    return { id: report.id, announcementId: report.announcementId, status: report.status, createdAt: report.createdAt };
   }
 
+  // UC-4: the moderation queue, oldest report first.
   async getAdminQueue() {
     const reports = await this.reports
       .createQueryBuilder('report')
@@ -82,7 +82,6 @@ export class ReportsService {
       .getMany();
 
     return reports.map((report) => ({
-
       id: report.id,
       reason: report.reason,
       status: report.status,
@@ -103,90 +102,138 @@ export class ReportsService {
     }));
   }
 
-  async hideAnnouncement(announcementId: number) {
-    const announcement = await this.announcements.findOne({
-      where: { id: announcementId },
-    });
-
-    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
-      throw new NotFoundException('Announcement not found.');
+  // FR-19: hide an active announcement. It can be restored later.
+  async hideAnnouncement(announcementId: number, adminId: number) {
+    const announcement = await this.findAnnouncement(announcementId);
+    if (!ACTIVE_STATUSES.includes(announcement.status)) {
+      throw new ConflictException(`This announcement is ${announcement.status}: only an active announcement can be hidden.`);
     }
-
-    announcement.status = AnnouncementStatus.Hidden;
-    await this.announcements.save(announcement);
-
-    await this.reports.update(
-      { announcementId, status: ReportStatus.Pending },
-      { status: ReportStatus.Reviewed },
-    );
-
-    return {
-      id: announcement.id,
-      status: announcement.status,
-    };
+    return this.moderate(announcement, AnnouncementStatus.Hidden, AuditAction.Hide, adminId);
   }
 
-  async deleteAnnouncement(announcementId: number) {
-    const announcement = await this.announcements.findOne({
-      where: { id: announcementId },
-    });
-
-    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
-      throw new NotFoundException('Announcement not found.');
+  // FR-19: a hidden announcement goes back to its previous status. Only active announcements can
+  // be hidden, so the previous status is Available for a found object and Open for a lost one.
+  async restoreAnnouncement(announcementId: number, adminId: number) {
+    const announcement = await this.findAnnouncement(announcementId);
+    if (announcement.status !== AnnouncementStatus.Hidden) {
+      throw new ConflictException('Only a hidden announcement can be restored.');
     }
-
-    announcement.status = AnnouncementStatus.Deleted;
-    await this.announcements.save(announcement);
-
-    await this.reports.update(
-      { announcementId, status: ReportStatus.Pending },
-      { status: ReportStatus.Reviewed },
-    );
-
-    return {
-      id: announcement.id,
-      status: announcement.status,
-    };
+    const previous = announcement.type === AnnouncementType.Found ? AnnouncementStatus.Available : AnnouncementStatus.Open;
+    return this.moderate(announcement, previous, AuditAction.Restore, adminId);
   }
 
+  // FR-19: logical deletion by an administrator, while the announcement is active or hidden.
+  async deleteAnnouncement(announcementId: number, adminId: number) {
+    const announcement = await this.findAnnouncement(announcementId);
+    if (![...ACTIVE_STATUSES, AnnouncementStatus.Hidden].includes(announcement.status)) {
+      throw new ConflictException(`This announcement is ${announcement.status} and can no longer be changed.`);
+    }
+    return this.moderate(announcement, AnnouncementStatus.Deleted, AuditAction.Delete, adminId);
+  }
+
+  // FR-19: a blocked user is refused at once (JwtAuthGuard reads the status on every request).
   async blockUser(targetUserId: number, actingAdminId: number) {
     if (targetUserId === actingAdminId) {
       throw new BadRequestException('You cannot block your own account.');
     }
-
-    const user = await this.users.findOne({ where: { id: targetUserId } });
-
-    if (!user) {
-      throw new NotFoundException('User not found.');
-    }
-
+    const user = await this.findUser(targetUserId);
     if (user.role === UserRole.Admin) {
       throw new ForbiddenException('Administrator accounts cannot be blocked.');
     }
-
     user.status = UserStatus.Suspended;
     await this.users.save(user);
-
-    return {
-      id: user.id,
-      email: user.email,
-      status: user.status,
-    };
+    await this.audit(actingAdminId, AuditAction.Block, AuditTarget.User, user.id);
+    return { id: user.id, email: user.email, status: user.status };
   }
 
+  // FR-19: unblock a user.
+  async unblockUser(targetUserId: number, actingAdminId: number) {
+    const user = await this.findUser(targetUserId);
+    if (user.status !== UserStatus.Suspended) {
+      throw new ConflictException('This account is not blocked.');
+    }
+    user.status = UserStatus.Active;
+    await this.users.save(user);
+    await this.audit(actingAdminId, AuditAction.Unblock, AuditTarget.User, user.id);
+    return { id: user.id, email: user.email, status: user.status };
+  }
+
+  // The report is closed without action.
   async dismissReport(reportId: number) {
     const report = await this.reports.findOne({ where: { id: reportId } });
-
     if (!report) {
       throw new NotFoundException('Report not found.');
     }
-
     report.status = ReportStatus.Dismissed;
     await this.reports.save(report);
+    return { id: report.id, status: report.status };
+  }
 
-    return {
-      id: report.id,
-      status: report.status,
-    };
+  // FR-19, AG Grid "users" table: every account (an administrator may see the emails).
+  async listUsers() {
+    const users = await this.users.find({ order: { createdAt: 'DESC', id: 'DESC' } });
+    return users.map((user) => ({
+      id: user.id,
+      firstName: user.firstName ?? null,
+      lastName: user.lastName ?? null,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      isVerified: user.isVerified,
+      createdAt: user.createdAt,
+    }));
+  }
+
+  // The hidden announcements, to restore or delete them.
+  async listHiddenAnnouncements() {
+    const announcements = await this.announcements.find({
+      where: { status: AnnouncementStatus.Hidden },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    return announcements.map((a) => ({ id: a.id, title: a.title, type: a.type, authorId: a.authorId, createdAt: a.createdAt }));
+  }
+
+  // FR-19: the audit trail, newest first.
+  async getAuditLog() {
+    const entries = await this.auditLogs.find({ order: { createdAt: 'DESC', id: 'DESC' }, take: 200 });
+    return entries.map((entry) => ({
+      id: entry.id,
+      adminId: entry.adminId,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      createdAt: entry.createdAt,
+    }));
+  }
+
+  private async findAnnouncement(id: number): Promise<Announcement> {
+    const announcement = await this.announcements.findOne({ where: { id } });
+    if (!announcement || announcement.status === AnnouncementStatus.Deleted) {
+      throw new NotFoundException('Announcement not found.');
+    }
+    return announcement;
+  }
+
+  private async findUser(id: number): Promise<User> {
+    const user = await this.users.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+    return user;
+  }
+
+  // Changes the status, closes the pending reports of the announcement and writes the audit trail.
+  private async moderate(announcement: Announcement, status: AnnouncementStatus, action: AuditAction, adminId: number) {
+    await this.announcements.update(announcement.id, { status });
+    await this.reports.update(
+      { announcementId: announcement.id, status: ReportStatus.Pending },
+      { status: ReportStatus.Reviewed },
+    );
+    await this.audit(adminId, action, AuditTarget.Announcement, announcement.id);
+    return { id: announcement.id, status };
+  }
+
+  private async audit(adminId: number, action: AuditAction, targetType: AuditTarget, targetId: number) {
+    await this.auditLogs.save(this.auditLogs.create({ adminId, action, targetType, targetId }));
   }
 }

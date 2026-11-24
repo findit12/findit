@@ -102,7 +102,7 @@ describe('AnnouncementsService', () => {
     createQueryBuilder: jest.Mock;
   };
 
-  let users: { findOneBy: jest.Mock };
+  let users: { findOneBy: jest.Mock; count: jest.Mock };
   let reference: {
     checkSelection: jest.Mock;
     checkFilters: jest.Mock;
@@ -130,6 +130,7 @@ describe('AnnouncementsService', () => {
         id: 1,
         email: 'elea@school.test',
       }),
+      count: jest.fn().mockResolvedValue(0),
     };
 
     reference = {
@@ -855,32 +856,34 @@ describe('AnnouncementsService', () => {
     });
   });
 
-  describe('getAdminStatistics (SCRUM-36)', () => {
-    it('returns zeroed metrics and null average return time when no announcements exist', async () => {
+  describe('getAdminStatistics (SCRUM-36, FR-19)', () => {
+    // The "today" of these tests: the last 6 months are June to November 2026.
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date('2026-11-20T12:00:00Z'), doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval'] });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('returns zeroed metrics, the registered accounts and 6 empty months when nothing is declared', async () => {
       announcements.find.mockResolvedValue([]);
+      users.count.mockResolvedValue(3);
+
       const stats = await service.getAdminStatistics();
-      expect(stats).toEqual({
+
+      expect(stats).toMatchObject({
         declaredCount: 0,
         returnedCount: 0,
         recoveryRate: 0,
         averageReturnTimeHours: null,
         averageReturnTimeDays: null,
-        breakdown: {
-          foundDeclared: 0,
-          lostDeclared: 0,
-          foundReturned: 0,
-          lostReturned: 0,
-          activeCount: 0,
-          closedCount: 0,
-          archivedCount: 0,
-          hiddenCount: 0,
-        },
+        registeredAccounts: 3,
       });
+      expect(stats.monthly.map((m) => m.month)).toEqual(['2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11']);
+      expect(stats.monthly.every((m) => m.declared === 0 && m.returned === 0)).toBe(true);
     });
 
-    it('computes declared counts, recovery rate, average return time, and status breakdown', async () => {
+    it('computes declared counts, recovery rate, average return time, months and status breakdown', async () => {
       announcements.find.mockResolvedValue([
-        { id: 1, type: AnnouncementType.Found, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-02T00:00:00Z') },
+        { id: 1, type: AnnouncementType.Found, status: AnnouncementStatus.Returned, createdAt: new Date('2026-10-30T00:00:00Z'), returnedAt: new Date('2026-10-31T00:00:00Z') },
         { id: 2, type: AnnouncementType.Lost, status: AnnouncementStatus.Returned, createdAt: new Date('2026-11-01T00:00:00Z'), returnedAt: new Date('2026-11-04T00:00:00Z') },
         { id: 3, type: AnnouncementType.Found, status: AnnouncementStatus.Available, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
         { id: 4, type: AnnouncementType.Lost, status: AnnouncementStatus.Closed, createdAt: new Date('2026-11-05T00:00:00Z'), returnedAt: null },
@@ -892,6 +895,10 @@ describe('AnnouncementsService', () => {
       expect(stats.recoveryRate).toBe(50);
       expect(stats.averageReturnTimeHours).toBe(48);
       expect(stats.averageReturnTimeDays).toBe(2);
+      expect(stats.monthly.slice(-2)).toEqual([
+        { month: '2026-10', declared: 1, returned: 1 },
+        { month: '2026-11', declared: 3, returned: 1 },
+      ]);
       expect(stats.breakdown).toEqual({
         foundDeclared: 2,
         lostDeclared: 2,
