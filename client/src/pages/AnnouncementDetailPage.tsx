@@ -26,6 +26,8 @@ export default function AnnouncementDetailPage() {
   const [proofDescription, setProofDescription] = useState('');
   const [discussionError, setDiscussionError] = useState('');
   const [submittingDiscussion, setSubmittingDiscussion] = useState(false);
+  // FR-14: the finder drops the object at the reception.
+  const [dropping, setDropping] = useState(false);
   // FR-18: report the announcement.
   const [reportReason, setReportReason] = useState('');
   const [reportError, setReportError] = useState('');
@@ -55,6 +57,26 @@ export default function AnnouncementDetailPage() {
       })
       .catch(() => setMyDiscussionId(null));
   }, [id, token]);
+
+  // FR-14: irreversible. The open discussions are closed and their owners are notified.
+  async function dropOff() {
+    if (
+      !announcement ||
+      !window.confirm('Confirm that you dropped this object at the reception? You cannot undo it.')
+    ) {
+      return;
+    }
+    setDropping(true);
+    try {
+      await apiRequest(`/announcements/${announcement.id}/drop-off`, { method: 'POST', token });
+      const data = await apiRequest<{ announcement: Announcement }>(`/announcements/${announcement.id}`);
+      setAnnouncement(data.announcement);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setDropping(false);
+    }
+  }
 
   async function remove() {
     if (!announcement || !window.confirm(`Delete "${announcement.title}"? It will disappear from FindIt.`)) {
@@ -210,6 +232,11 @@ export default function AnnouncementDetailPage() {
           <button className="secondary danger" onClick={remove}>
             Delete
           </button>
+          {isFound && !atReception && announcement.status === 'Available' && (
+            <button className="secondary" onClick={dropOff} disabled={dropping}>
+              {dropping ? 'Saving...' : 'I dropped it at the reception'}
+            </button>
+          )}
           {isClosable(announcement) && (
             <button className="primary close-button" onClick={close}>
               I got it back: close the announcement

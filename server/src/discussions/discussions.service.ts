@@ -131,6 +131,7 @@ export class DiscussionsService {
             ? { content: lastMessage.content, senderId: lastMessage.senderId, createdAt: lastMessage.createdAt }
             : null,
           unreadCount,
+          closed: discussion.closedAt !== null && discussion.closedAt !== undefined,
           createdAt: discussion.createdAt,
         };
       }),
@@ -245,6 +246,10 @@ export class DiscussionsService {
   // more until the other person has read the conversation.
   async sendMessage(discussionId: number, userId: number, dto: CreateMessageDto) {
     const discussion = await this.findForParticipant(discussionId, userId);
+    // FR-14: after a drop-off at the reception, the conversation is closed.
+    if (discussion.closedAt) {
+      throw new ConflictException('This discussion is closed: the object was dropped at the reception.');
+    }
     const recipientId = discussion.ownerId === userId ? discussion.announcement.authorId : discussion.ownerId;
 
     const alreadyUnread = await this.messages.count({
@@ -252,7 +257,7 @@ export class DiscussionsService {
     });
 
     const message = await this.messages.save(
-      this.messages.create({ discussionId, senderId: userId, content: dto.content, readAt: null }),
+      this.messages.create({ discussionId, senderId: userId, content: dto.content, readAt: null, isSystem: false }),
     );
 
     if (alreadyUnread === 0) {

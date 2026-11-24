@@ -37,6 +37,7 @@ function discussion(overrides: Partial<Discussion> = {}): Discussion {
     ownerId: 2,
     owner: { id: 2, email: 'owner@school.test', firstName: 'Own', lastName: 'Er' },
     description: 'Cat sticker on the back',
+    closedAt: null,
     createdAt: new Date('2026-11-01T10:00:00Z'),
     announcement: announcement(),
     ...overrides,
@@ -200,6 +201,12 @@ describe('DiscussionsService', () => {
       expect(mail.newMessage).not.toHaveBeenCalled();
     });
 
+    it('refuses a message in a discussion closed by a drop-off at the reception (FR-14)', async () => {
+      discussions.findOne.mockResolvedValue(discussion({ closedAt: new Date('2026-11-03T10:00:00Z') }));
+      await expect(service.sendMessage(3, 2, { content: 'Hello' })).rejects.toThrow('closed');
+      expect(messages.save).not.toHaveBeenCalled();
+    });
+
     it('emails the initiator when the author writes', async () => {
       await service.sendMessage(3, 1, { content: 'Yes, it is here' });
       expect(mail.newMessage).toHaveBeenCalledWith('owner@school.test', expect.anything());
@@ -253,6 +260,7 @@ describe('DiscussionsService', () => {
         announcementTitle: 'Black phone',
         announcementType: AnnouncementType.Found,
         announcementStatus: AnnouncementStatus.Available,
+        closed: false,
         myRole: 'finder',
         otherParticipant: { id: 2, firstName: 'Own', lastName: 'Er' },
         lastMessage: { content: 'Hello', senderId: 2, createdAt: new Date('2026-11-02T10:00:00Z') },

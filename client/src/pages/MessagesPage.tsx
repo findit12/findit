@@ -180,7 +180,7 @@ export default function MessagesPage() {
                   </Link>
                   {!isActive && ` · ${selectedDiscussion.announcementStatus}`}
                 </p>
-                {isActive && (
+                {isActive && !selectedDiscussion.closed && (
                   <button
                     type="button"
                     className="primary handover-button"
@@ -206,7 +206,13 @@ export default function MessagesPage() {
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={message.senderId === userId ? 'chat-message own-message' : 'chat-message other-message'}
+                    className={
+                      message.isSystem
+                        ? 'chat-message system-message'
+                        : message.senderId === userId
+                          ? 'chat-message own-message'
+                          : 'chat-message other-message'
+                    }
                   >
                     <p>{message.content}</p>
                     <small>{new Date(message.createdAt).toLocaleString()}</small>
@@ -214,6 +220,14 @@ export default function MessagesPage() {
                 ))}
               </div>
 
+              {/* FR-14: after a drop-off at the reception, the discussion is closed. */}
+              {selectedDiscussion.closed && (
+                <p className="notice">
+                  This discussion is closed: the object is at the reception desk. Claim it from the announcement page.
+                </p>
+              )}
+
+              {!selectedDiscussion.closed && (
               <form className="chat-form" onSubmit={sendMessage}>
                 <textarea
                   value={content}
@@ -227,6 +241,7 @@ export default function MessagesPage() {
                   {sending ? 'Sending...' : 'Send message'}
                 </button>
               </form>
+              )}
             </>
           )}
         </div>

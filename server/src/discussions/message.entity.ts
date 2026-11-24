@@ -37,6 +37,10 @@ export class Message {
   })
   readAt!: Date | null;
 
+  // FR-14: a message written by the system (for example "the object was dropped at the reception").
+  @Column({ name: 'is_system', type: 'boolean', default: false })
+  isSystem!: boolean;
+
   @ManyToOne(() => Discussion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'discussion_id' })
   discussion!: Discussion;

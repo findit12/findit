@@ -139,6 +139,17 @@ export class MailService {
   }
 
   // SCRUM-32 (FR-13 "item returned"): sent to the other person when one of them confirms the handover.
+  // FR-14: the finder dropped the object at the reception; the owner must claim it there (FR-16).
+  async droppedAtReception(to: string, announcement: { id: number; title: string }): Promise<void> {
+    const base = this.getClientBaseUrl();
+    await this.send(
+      to,
+      'Your FindIt object is now at the reception',
+      `${base}/announcements/${announcement.id}`,
+      `The finder of "${announcement.title}" dropped it at the reception. Your discussion is closed: claim the object at the reception, with the proof, from the announcement page.`,
+    );
+  }
+
   async handover(
     to: string,
     announcement: { id: number; title: string },

@@ -24,6 +24,7 @@ import { DiscussionsModule } from './discussions/discussions.module';
 import { LimitsModule } from './limits/limits.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { ReceptionModule } from './reception/reception.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     ReportsModule,
     LimitsModule,
     SchedulerModule,
+    ReceptionModule,
   ],
 })
 export class AppModule {}
