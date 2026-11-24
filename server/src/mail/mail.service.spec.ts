@@ -97,4 +97,15 @@ describe('MailService', () => {
     expect(html).toContain('Black phone');
     expect(html).toContain('http://localhost:5173/announcements/42');
   });
+  it('writes a match alert pointing to the other announcement (SCRUM-28)', async () => {
+    await service.matchAlert('owner@school.edu', { id: 45, title: 'Black phone', type: 'found' });
+
+    const dir = path.resolve(process.cwd(), 'dev-emails');
+    const newest = (await readdir(dir)).sort().reverse()[0];
+    const html = await readFile(path.join(dir, newest), 'utf8');
+
+    expect(html).toContain('FindIt found a possible match');
+    expect(html).toContain('A found object may be yours: &quot;Black phone&quot;');
+    expect(html).toContain('http://localhost:5173/announcements/45');
+  });
 });

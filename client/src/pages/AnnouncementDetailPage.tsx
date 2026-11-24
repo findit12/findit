@@ -9,6 +9,7 @@ import {
   isEditable,
 } from '../types/announcement';
 import { useAuth } from '../auth/AuthContext';
+import AnnouncementCard from '../components/AnnouncementCard';
 
 // Detail page of one announcement: /announcements/:id.
 // The hidden detail is never shown here.
@@ -348,6 +349,18 @@ const canConfirmHandover =
               I got it back: close the announcement
             </button>
           )}
+        </div>
+      )}
+
+      {/* SCRUM-29: up to 4 similar announcements of the opposite type. */}
+      {matches.length > 0 && (
+        <div className="similar-section">
+          <h2>{announcement.type === 'lost' ? 'Found objects that may be yours' : 'Lost announcements that may match'}</h2>
+          <ul className="gallery-grid similar-grid">
+            {matches.map((match) => (
+              <AnnouncementCard key={match.id} announcement={match} />
+            ))}
+          </ul>
         </div>
       )}
 
