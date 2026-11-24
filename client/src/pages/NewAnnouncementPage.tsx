@@ -32,14 +32,20 @@ export default function NewAnnouncementPage() {
     photos.forEach((photo) => body.append('photos', photo));
 
     try {
-      const data = await apiRequest<{ announcement: Announcement }>('/announcements', {
+      const data = await apiRequest<{ announcement: Announcement; matchCount: number }>('/announcements', {
         method: 'POST',
         body,
         token,
       });
-      navigate(`/announcements/${data.announcement.id}`, {
-        state: { notice: 'Your announcement is published. A confirmation email is on its way.' },
-      });
+      // UC-3: for a lost object, say whether similar found objects already exist.
+      let notice = 'Your announcement is published. A confirmation email is on its way.';
+      if (data.announcement.type === 'lost') {
+        notice +=
+          data.matchCount > 0
+            ? ' Similar found objects already exist: see them below.'
+            : ' We will alert you if a similar object is found.';
+      }
+      navigate(`/announcements/${data.announcement.id}`, { state: { notice } });
     } catch (error) {
       if ((error as ApiError).status === 401) {
         signOut(); // the session has expired: back to the sign-in page

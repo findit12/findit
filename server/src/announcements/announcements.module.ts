@@ -9,6 +9,7 @@ import { Announcement } from './announcement.entity';
 import { AnnouncementMatch } from './announcement-match.entity';
 import { AnnouncementsController } from './announcements.controller';
 import { AnnouncementsService } from './announcements.service';
+import { MatchingService } from './matching.service';
 import { PhotoStorageService } from './photo-storage.service';
 import { Discussion } from '../discussions/discussion.entity';
 import { Message } from '../discussions/message.entity';
@@ -28,6 +29,6 @@ import { Message } from '../discussions/message.entity';
     SavedSearchesModule, // gives SavedSearchesService, used to alert the saved searches
   ],
   controllers: [AnnouncementsController],
-  providers: [AnnouncementsService, PhotoStorageService],
+  providers: [AnnouncementsService, PhotoStorageService, MatchingService],
 })
 export class AnnouncementsModule {}

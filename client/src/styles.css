@@ -1139,3 +1139,23 @@ main:has(.messages-layout) {
     white-space: nowrap;
   }
 }
+
+/* ---------- Similar announcements on a detail page (SCRUM-29) ---------- */
+
+.similar-section {
+  margin-top: 28px;
+}
+
+.similar-section h2 {
+  font-size: 1.2rem;
+}
+
+/* The detail card is narrower than the gallery: smaller cards, two per row. */
+.similar-grid {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  margin: 12px 0 0;
+}
+
+.similar-grid .gallery-photo {
+  height: 120px;
+}

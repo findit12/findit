@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { apiRequest, photoUrl } from '../api';
+import { apiRequest } from '../api';
 import type { ApiError } from '../api';
-import type { Announcement, AnnouncementPage, AnnouncementType, ReferenceData } from '../types/announcement';
+import type { AnnouncementPage, AnnouncementType, ReferenceData } from '../types/announcement';
 import { useAuth } from '../auth/AuthContext';
+import AnnouncementCard from '../components/AnnouncementCard';
 
 // SCRUM-23: the filters kept in the address (?categoryId=1&placeId=3...). The tab ("type") and
 // the page are kept in the address too, but they are not filters.
@@ -22,11 +23,6 @@ function readPage(value: string | null): number {
   return Number.isFinite(page) && page >= 1 ? page : 1;
 }
 
-// "2026-10-10" -> "10/10/2026" (written by hand to avoid time zone shifts).
-function formatDate(day: string): string {
-  return day.split('-').reverse().join('/');
-}
-
 // FR-23: "closest date" needs a date, "best match" needs a keyword. A sort that is no longer
 // possible is removed from the address (the server would refuse it).
 function removeImpossibleSort(params: URLSearchParams) {
@@ -35,33 +31,6 @@ function removeImpossibleSort(params: URLSearchParams) {
   if ((sort === 'closestDate' && !hasDate) || (sort === 'bestMatch' && !params.get('q'))) {
     params.delete('sort');
   }
-}
-
-function AnnouncementCard({ announcement }: { announcement: Announcement }) {
-  const isFound = announcement.type === 'found';
-  const firstPhoto = announcement.photos[0];
-  return (
-    <li>
-      <Link className="gallery-item" to={`/announcements/${announcement.id}`}>
-        {firstPhoto ? (
-          <img className="gallery-photo" src={photoUrl(firstPhoto)} alt={announcement.title} loading="lazy" />
-        ) : (
-          <div className="gallery-photo gallery-no-photo">No photo</div>
-        )}
-        <div className="gallery-body">
-          <span className={`gallery-badge ${isFound ? 'badge-found' : 'badge-lost'}`}>
-            {isFound ? 'Found' : 'Lost'}
-          </span>
-          <h2>{announcement.title}</h2>
-          <p>
-            {announcement.category.name} · {announcement.objectType.name}
-          </p>
-          <p>{announcement.place.name}</p>
-          <p>{formatDate(announcement.eventDate)}</p>
-        </div>
-      </Link>
-    </li>
-  );
 }
 
 // SCRUM-22 to SCRUM-27: public gallery, 12 announcements per page (the server decides the size).

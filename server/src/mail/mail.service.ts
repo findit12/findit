@@ -113,6 +113,17 @@ export class MailService {
     );
   }
 
+  // SCRUM-28 (FR-13 "match alert"): sent to both authors when a found and a lost announcement
+  // look alike. "announcement" is the OTHER announcement, the one the user should look at.
+  async matchAlert(to: string, announcement: ConfirmedAnnouncement): Promise<void> {
+    const base = this.getClientBaseUrl();
+    const intro =
+      announcement.type === 'found'
+        ? `A found object may be yours: "${announcement.title}". Open it to check, and start a discussion if it is yours.`
+        : `Someone may have lost the object you found: "${announcement.title}". Open the announcement to check.`;
+    await this.send(to, 'FindIt found a possible match', `${base}/announcements/${announcement.id}`, intro);
+  }
+
   // Jira task: notify the finder when someone starts a discussion about their found item.
   async discussionStarted(
     to: string,

@@ -23,6 +23,7 @@ import { CreateAnnouncementDto } from './announcements.dto';
 import { AnnouncementsService } from './announcements.service';
 import { PhotoStorageService } from './photo-storage.service';
 import { SavedSearchesService } from '../saved-searches/saved-searches.service';
+import { MatchingService } from './matching.service';
 import { Message } from '../discussions/message.entity';
 
 function photo(): Express.Multer.File {
@@ -119,6 +120,8 @@ describe('AnnouncementsService', () => {
   };
 
   let savedSearches: { notifyMatches: jest.Mock };
+  let matching: { matchNewAnnouncement: jest.Mock };
+  let announcementMatches: { find: jest.Mock };
 
   let discussions: {
     create: jest.Mock;
@@ -171,6 +174,9 @@ describe('AnnouncementsService', () => {
       notifyMatches: jest.fn().mockResolvedValue(undefined),
     };
 
+    matching = { matchNewAnnouncement: jest.fn().mockResolvedValue(0) };
+    announcementMatches = { find: jest.fn().mockResolvedValue([]) };
+
     discussions = {
       create: jest.fn((data) => data),
       save: jest.fn().mockImplementation(async (data) => ({
@@ -200,12 +206,7 @@ messages = {
         },
         {
           provide: getRepositoryToken(AnnouncementMatch),
-          useValue: {
-            find: jest.fn().mockResolvedValue([]),
-            findOne: jest.fn().mockResolvedValue(null),
-            create: jest.fn((data) => data),
-            save: jest.fn().mockImplementation(async (data) => data),
-          },
+          useValue: announcementMatches,
         },
         {
           provide: getRepositoryToken(Discussion),
@@ -234,6 +235,10 @@ messages = {
         {
           provide: SavedSearchesService,
           useValue: savedSearches,
+        },
+        {
+          provide: MatchingService,
+          useValue: matching,
         },
       ],
     }).compile();
@@ -394,6 +399,23 @@ messages = {
       ).resolves.toBeDefined();
     });
 
+    it('runs the matching before answering and returns the number of matches (SCRUM-28, UC-3)', async () => {
+      matching.matchNewAnnouncement.mockResolvedValue(2);
+
+      const result = await service.create(1, lostForm(), []);
+
+      expect(matching.matchNewAnnouncement.mock.calls[0][0]).toMatchObject({ id: 7, type: AnnouncementType.Lost });
+      expect(result.matchCount).toBe(2);
+    });
+
+    it('still succeeds, with 0 match, when the matching fails', async () => {
+      matching.matchNewAnnouncement.mockRejectedValue(new Error('database busy'));
+
+      const result = await service.create(1, foundForm(), [photo()]);
+
+      expect(result.matchCount).toBe(0);
+    });
+
     it('still succeeds when the confirmation email fails', async () => {
       mail.confirmation.mockRejectedValue(
         new Error('SMTP down'),
@@ -431,6 +453,25 @@ messages = {
       await expect(
         service.findPublic(7),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findPublicMatches (SCRUM-29)', () => {
+    it('shows at most 4 public similar announcements, without the hidden detail', async () => {
+      announcements.findOne.mockResolvedValue(storedAnnouncement());
+      const pairs = [1, 2, 3, 4, 5].map((n) => ({
+        announcementId: n,
+        matchedAnnouncementId: 7,
+        score: 100 - n,
+        announcement: storedAnnouncement({ id: n, type: AnnouncementType.Lost, status: AnnouncementStatus.Open }),
+      }));
+      pairs[0].announcement.status = AnnouncementStatus.Closed; // no longer public: left out
+      announcementMatches.find.mockResolvedValue(pairs);
+
+      const result = await service.findPublicMatches(7);
+
+      expect(result.matches.map((match) => match.announcement.id)).toEqual([2, 3, 4, 5]);
+      expect(result.matches[0].announcement).not.toHaveProperty('hiddenDetail');
     });
   });
 

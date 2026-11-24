@@ -28,6 +28,7 @@ import {
 } from './announcements.dto';
 import { checkPhotos } from './photo-rules';
 import { PhotoStorageService } from './photo-storage.service';
+import { MatchingService } from './matching.service';
 import { Discussion } from '../discussions/discussion.entity';
 import { Message } from '../discussions/message.entity';
 import { CreateDiscussionDto } from '../discussions/create-discussion.dto';
@@ -39,6 +40,9 @@ const EDITABLE_STATUSES = [
   AnnouncementStatus.Available,
   AnnouncementStatus.Open,
 ];
+
+// SCRUM-29: at most 4 similar announcements on a detail page.
+const MAX_SIMILAR = 4;
 
 const GALLERY_STATUSES = [
   AnnouncementStatus.Available,
@@ -75,6 +79,7 @@ export class AnnouncementsService {
     private readonly photoStorage: PhotoStorageService,
     private readonly mail: MailService,
     private readonly savedSearches: SavedSearchesService,
+    private readonly matching: MatchingService,
   ) {}
 
   // SCRUM-16 and SCRUM-20: create a found or lost announcement.
@@ -155,104 +160,23 @@ export class AnnouncementsService {
       );
     });
 
-    void this.matchAnnouncements(saved).catch((err) => {
+    // SCRUM-28: the matching runs before the answer, so the page can say "We will alert you if
+    // a similar object is found" when there is no match yet (UC-3). If it fails, the
+    // announcement is still published: matchCount is then 0.
+    let matchCount = 0;
+    try {
+      matchCount = await this.matching.matchNewAnnouncement(saved);
+    } catch (err) {
       this.logger.error(
         `Failed to calculate matches for announcement ${saved.id}`,
         err instanceof Error ? err.stack : String(err),
       );
-    });
+    }
 
     return {
       announcement: toOwnerView(await this.findWithDetails(saved.id)),
+      matchCount,
     };
-  }
-
-  // SCRUM-28: calculate compatible announcements.
-  private async matchAnnouncements(source: Announcement): Promise<void> {
-    const oppositeType =
-      source.type === AnnouncementType.Found
-        ? AnnouncementType.Lost
-        : AnnouncementType.Found;
-
-    const candidates = await this.announcements.find({
-      where: {
-        type: oppositeType,
-        status: In(GALLERY_STATUSES),
-      },
-    });
-
-    for (const candidate of candidates) {
-      if (
-        candidate.id === source.id ||
-        candidate.authorId === source.authorId
-      ) {
-        continue;
-      }
-
-      const score = this.calculateMatchScore(source, candidate);
-
-      if (score < 65) {
-        continue;
-      }
-
-      const announcementId = Math.min(source.id, candidate.id);
-      const matchedAnnouncementId = Math.max(source.id, candidate.id);
-
-      try {
-        await this.announcementMatches.save(
-          this.announcementMatches.create({
-            announcementId,
-            matchedAnnouncementId,
-            score,
-          }),
-        );
-      } catch (err) {
-        this.logger.warn(
-          `Could not save match ${announcementId}/${matchedAnnouncementId}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    }
-  }
-
-  private calculateMatchScore(
-    source: Announcement,
-    candidate: Announcement,
-  ): number {
-    let score = 0;
-
-    if (source.categoryId === candidate.categoryId) score += 25;
-    if (source.objectTypeId === candidate.objectTypeId) score += 30;
-    if (source.placeId === candidate.placeId) score += 15;
-
-    const sourceDate = Date.parse(`${source.eventDate}T00:00:00Z`);
-    const candidateDate = Date.parse(`${candidate.eventDate}T00:00:00Z`);
-    const daysApart = Math.abs(sourceDate - candidateDate) / 86_400_000;
-
-    if (daysApart <= 7) score += 15;
-    else if (daysApart <= 30) score += 10;
-    else if (daysApart <= 90) score += 5;
-
-    if (
-      source.brand?.trim() &&
-      candidate.brand?.trim() &&
-      source.brand.trim().toLowerCase() ===
-        candidate.brand.trim().toLowerCase()
-    ) {
-      score += 7;
-    }
-
-    if (
-      source.color?.trim() &&
-      candidate.color?.trim() &&
-      source.color.trim().toLowerCase() ===
-        candidate.color.trim().toLowerCase()
-    ) {
-      score += 8;
-    }
-
-    return score;
   }
 
   // SCRUM-30: start a discussion with proof of ownership.
@@ -590,7 +514,7 @@ export class AnnouncementsService {
     return { announcement: toPublicView(announcement) };
   }
 
-  // SCRUM-29: public matching announcements.
+  // SCRUM-29: the similar announcements of the opposite type, best score first, 4 at most.
   async findPublicMatches(id: number) {
     await this.findPublic(id);
 
@@ -628,7 +552,7 @@ export class AnnouncementsService {
       );
 
     return {
-      matches: publicMatches.map(({ score, other }) => ({
+      matches: publicMatches.slice(0, MAX_SIMILAR).map(({ score, other }) => ({
         score,
         announcement: toPublicView(other),
       })),
