@@ -142,6 +142,76 @@ describe('SavedSearchesService', () => {
     });
   });
 
+  describe('findOne', () => {
+    it('reads one of my searches', async () => {
+      searches.findOneBy.mockResolvedValue(savedSearch({ keyword: 'keys' }));
+      const { savedSearch: view } = await service.findOne(5, 1);
+      expect(view).toMatchObject({ id: 1, q: 'keys' });
+      expect(view).not.toHaveProperty('user');
+    });
+
+    it('answers 404 for an unknown search and 403 for the search of someone else', async () => {
+      searches.findOneBy.mockResolvedValue(null);
+      await expect(service.findOne(5, 99)).rejects.toBeInstanceOf(NotFoundException);
+
+      searches.findOneBy.mockResolvedValue(savedSearch({ userId: 6 }));
+      await expect(service.findOne(5, 1)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('update', () => {
+    it('changes what is sent and keeps the filters that are not sent (Lab 6 pattern)', async () => {
+      searches.findOneBy.mockResolvedValue(savedSearch({ categoryId: 1, placeId: 3, keyword: 'keys' }));
+
+      const { savedSearch: view } = await service.update(5, 1, { objectTypeId: 2, q: '  phone ' });
+
+      expect(searches.save.mock.calls[0][0]).toMatchObject({
+        id: 1,
+        userId: 5,
+        categoryId: 1,
+        objectTypeId: 2,
+        placeId: 3,
+        keyword: 'phone',
+      });
+      expect(view.q).toBe('phone');
+    });
+
+    it('clears a filter that is sent as null, as long as another criterion is left', async () => {
+      searches.findOneBy.mockResolvedValue(savedSearch({ categoryId: 1, placeId: 3, keyword: 'keys' }));
+
+      await service.update(5, 1, { placeId: null as unknown as undefined });
+
+      expect(searches.save.mock.calls[0][0]).toMatchObject({ categoryId: 1, placeId: null, keyword: 'keys' });
+    });
+
+    it('refuses to clear the last criterion', async () => {
+      searches.findOneBy.mockResolvedValue(savedSearch({ keyword: 'keys' }));
+
+      await expect(service.update(5, 1, { q: '' })).rejects.toBeInstanceOf(BadRequestException);
+      expect(searches.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses an empty search, inverted dates and unknown filters, without saving', async () => {
+      searches.findOneBy.mockResolvedValue(savedSearch());
+      await expect(service.update(5, 1, {})).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.update(5, 1, { dateFrom: '2026-10-31', dateTo: '2026-10-01' })).rejects.toThrow(
+        'The start date must be before the end date.',
+      );
+      reference.checkFilters.mockRejectedValue(new BadRequestException('Choose a place from the list.'));
+      await expect(service.update(5, 1, { placeId: 99 })).rejects.toBeInstanceOf(BadRequestException);
+      expect(searches.save).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 for an unknown search and 403 for the search of someone else', async () => {
+      searches.findOneBy.mockResolvedValue(null);
+      await expect(service.update(5, 99, { q: 'keys' })).rejects.toBeInstanceOf(NotFoundException);
+
+      searches.findOneBy.mockResolvedValue(savedSearch({ userId: 6 }));
+      await expect(service.update(5, 1, { q: 'keys' })).rejects.toBeInstanceOf(ForbiddenException);
+      expect(searches.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('remove', () => {
     it('deletes one of my searches', async () => {
       searches.findOneBy.mockResolvedValue(savedSearch());

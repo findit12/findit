@@ -55,6 +55,9 @@ export class JwtAuthGuard implements CanActivate {
       if (user.status === UserStatus.Suspended) {
         throw new UnauthorizedException('Account is suspended.');
       }
+      if (user.status === UserStatus.Anonymized) {
+        throw new UnauthorizedException('Authentication required.');
+      }
 
       request.user = user;
     }

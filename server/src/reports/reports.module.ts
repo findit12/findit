@@ -7,6 +7,7 @@ import { Report } from './report.entity';
 import { AuditLog } from './audit-log.entity';
 import { AnnouncementReportsController } from './announcement-reports.controller';
 import { AdminReportsController } from './admin-reports.controller';
+import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 
 @Module({
@@ -14,7 +15,7 @@ import { ReportsService } from './reports.service';
     TypeOrmModule.forFeature([Report, Announcement, User, AuditLog]),
     AuthModule,
   ],
-  controllers: [AnnouncementReportsController, AdminReportsController],
+  controllers: [AnnouncementReportsController, AdminReportsController, ReportsController],
   providers: [ReportsService],
 })
 export class ReportsModule {}

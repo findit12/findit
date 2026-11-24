@@ -62,14 +62,35 @@ export class SavedSearchesService {
     private readonly mail: MailService,
   ) {}
 
-  // Saves the current search of the gallery for the signed-in user.
-  async create(userId: number, dto: CreateSavedSearchDto) {
+  // An empty search would match every announcement and flood the user with emails, so it is refused.
+  // The ids of the filters are checked with the reference lists. Returns the cleaned keyword.
+  private async checkSearch(dto: CreateSavedSearchDto): Promise<string> {
     const keyword = (dto.q ?? '').trim();
-    // An empty search would match every announcement and flood the user with emails.
     if (!dto.categoryId && !dto.objectTypeId && !dto.placeId && !dto.dateFrom && !dto.dateTo && !keyword) {
       throw new BadRequestException('Choose at least one filter or a keyword before saving a search.');
     }
+    if (dto.dateFrom && dto.dateTo && dto.dateFrom > dto.dateTo) {
+      throw new BadRequestException('The start date must be before the end date.');
+    }
     await this.reference.checkFilters(dto.categoryId, dto.objectTypeId, dto.placeId);
+    return keyword;
+  }
+
+  // Loads a saved search and checks that it belongs to the signed-in user.
+  private async findOwned(userId: number, id: number, action: string): Promise<SavedSearch> {
+    const search = await this.searches.findOneBy({ id });
+    if (!search) {
+      throw new NotFoundException('Saved search not found.');
+    }
+    if (search.userId !== userId) {
+      throw new ForbiddenException(`You can only ${action} your own saved searches.`);
+    }
+    return search;
+  }
+
+  // Saves the current search of the gallery for the signed-in user.
+  async create(userId: number, dto: CreateSavedSearchDto) {
+    const keyword = await this.checkSearch(dto);
 
     const saved = await this.searches.save(
       this.searches.create({
@@ -94,14 +115,37 @@ export class SavedSearchesService {
     return { savedSearches: searches.map(toView) };
   }
 
+  // Lab 6, "retrieve by id": one of my saved searches.
+  async findOne(userId: number, id: number) {
+    return { savedSearch: toView(await this.findOwned(userId, id, 'read')) };
+  }
+
+  // Lab 6, "update" (same pattern as the lab: { ...old, ...body }): a field that is sent replaces the
+  // old value, a field that is not sent is kept. Send null to clear a filter. The result is checked
+  // like a new search (it cannot be empty).
+  async update(userId: number, id: number, dto: CreateSavedSearchDto) {
+    const search = await this.findOwned(userId, id, 'change');
+    const merged: CreateSavedSearchDto = {
+      categoryId: dto.categoryId !== undefined ? dto.categoryId : search.categoryId ?? undefined,
+      objectTypeId: dto.objectTypeId !== undefined ? dto.objectTypeId : search.objectTypeId ?? undefined,
+      placeId: dto.placeId !== undefined ? dto.placeId : search.placeId ?? undefined,
+      dateFrom: dto.dateFrom !== undefined ? dto.dateFrom : search.dateFrom ?? undefined,
+      dateTo: dto.dateTo !== undefined ? dto.dateTo : search.dateTo ?? undefined,
+      q: dto.q !== undefined ? dto.q : search.keyword ?? undefined,
+    };
+    const keyword = await this.checkSearch(merged);
+
+    search.categoryId = merged.categoryId ?? null;
+    search.objectTypeId = merged.objectTypeId ?? null;
+    search.placeId = merged.placeId ?? null;
+    search.dateFrom = merged.dateFrom ?? null;
+    search.dateTo = merged.dateTo ?? null;
+    search.keyword = keyword || null;
+    return { savedSearch: toView(await this.searches.save(search)) };
+  }
+
   async remove(userId: number, id: number): Promise<void> {
-    const search = await this.searches.findOneBy({ id });
-    if (!search) {
-      throw new NotFoundException('Saved search not found.');
-    }
-    if (search.userId !== userId) {
-      throw new ForbiddenException('You can only delete your own saved searches.');
-    }
+    await this.findOwned(userId, id, 'delete');
     await this.searches.delete(id);
   }
 

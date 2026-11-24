@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUserId } from '../auth/current-user-id.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -28,6 +28,25 @@ export class SavedSearchesController {
   @ApiResponse({ status: 401, description: 'Not signed in' })
   findMine(@CurrentUserId() userId: number) {
     return this.service.findMine(userId);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Read one of my saved searches' })
+  @ApiResponse({ status: 200, description: 'The saved search' })
+  @ApiResponse({ status: 403, description: 'It belongs to someone else' })
+  @ApiResponse({ status: 404, description: 'Unknown saved search' })
+  findOne(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number) {
+    return this.service.findOne(userId, id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Replace one of my saved searches (a filter that is not sent is cleared)' })
+  @ApiResponse({ status: 200, description: 'The updated saved search' })
+  @ApiResponse({ status: 400, description: 'Empty search, or invalid filter' })
+  @ApiResponse({ status: 403, description: 'It belongs to someone else' })
+  @ApiResponse({ status: 404, description: 'Unknown saved search' })
+  update(@CurrentUserId() userId: number, @Param('id', ParseIntPipe) id: number, @Body() dto: CreateSavedSearchDto) {
+    return this.service.update(userId, id, dto);
   }
 
   @Delete(':id')

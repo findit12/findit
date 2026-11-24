@@ -18,6 +18,7 @@ import { User } from '../users/user.entity';
 import { CreateDiscussionDto } from './create-discussion.dto';
 import { CreateMessageDto } from './create-message.dto';
 import { Discussion } from './discussion.entity';
+import { UpdateDiscussionDto } from './update-discussion.dto';
 import { Message } from './message.entity';
 
 // SCRUM-30 to SCRUM-32 (FR-11, FR-12, FR-13, FR-17), the "ConversationService" of the SDD.
@@ -147,6 +148,77 @@ export class DiscussionsService {
     return { unreadCount };
   }
 
+  // Lab 6, "retrieve by id": one of my discussions, with its proof. Only the two participants can read it.
+  async findOne(discussionId: number, userId: number) {
+    const discussion = await this.findForParticipant(discussionId, userId);
+    return {
+      discussion: {
+        id: discussion.id,
+        announcementId: discussion.announcementId,
+        initiatorId: discussion.ownerId,
+        proof: discussion.description,
+        createdAt: discussion.createdAt,
+      },
+    };
+  }
+
+  // Lab 6, "update": the initiator corrects the proof, as long as the announcement is still public.
+  async updateProof(discussionId: number, userId: number, dto: UpdateDiscussionDto) {
+    const discussion = await this.findForInitiator(discussionId, userId);
+    if (!ACTIVE_STATUSES.includes(discussion.announcement.status)) {
+      throw new ConflictException('This announcement is no longer available.');
+    }
+    discussion.description = dto.description;
+    await this.discussions.save(discussion);
+    return this.findOne(discussionId, userId);
+  }
+
+  // Lab 6, "delete": the initiator stops the discussion. The messages are deleted with it.
+  async remove(discussionId: number, userId: number): Promise<void> {
+    const discussion = await this.findForInitiator(discussionId, userId);
+    await this.discussions.delete(discussion.id);
+  }
+
+  // Lab 6: one message of a discussion.
+  async getMessage(discussionId: number, messageId: number, userId: number) {
+    await this.findForParticipant(discussionId, userId);
+    return { message: await this.findMessage(discussionId, messageId) };
+  }
+
+  // Lab 6: only the sender can change a message, and only while the other person has not read it.
+  async updateMessage(discussionId: number, messageId: number, userId: number, dto: CreateMessageDto) {
+    await this.findForParticipant(discussionId, userId);
+    const message = await this.findOwnUnreadMessage(discussionId, messageId, userId);
+    message.content = dto.content;
+    return { message: await this.messages.save(message) };
+  }
+
+  // Lab 6: only the sender can delete a message, and only while the other person has not read it.
+  async removeMessage(discussionId: number, messageId: number, userId: number): Promise<void> {
+    await this.findForParticipant(discussionId, userId);
+    const message = await this.findOwnUnreadMessage(discussionId, messageId, userId);
+    await this.messages.delete(message.id);
+  }
+
+  private async findMessage(discussionId: number, messageId: number): Promise<Message> {
+    const message = await this.messages.findOneBy({ id: messageId, discussionId });
+    if (!message) {
+      throw new NotFoundException('Message not found.');
+    }
+    return message;
+  }
+
+  private async findOwnUnreadMessage(discussionId: number, messageId: number, userId: number): Promise<Message> {
+    const message = await this.findMessage(discussionId, messageId);
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('You can only change your own messages.');
+    }
+    if (message.readAt) {
+      throw new ConflictException('This message has already been read.');
+    }
+    return message;
+  }
+
   // SCRUM-31: the proof and the messages of a discussion. The messages received are marked as read.
   // FR-11: the author reads the proof here to check it (only the two participants can).
   async getMessages(discussionId: number, userId: number) {
@@ -231,6 +303,15 @@ export class DiscussionsService {
   private isObjectOwner(discussion: Discussion, announcement: Announcement, userId: number): boolean {
     const ownerId = announcement.type === AnnouncementType.Found ? discussion.ownerId : announcement.authorId;
     return ownerId === userId;
+  }
+
+  // Same as findForParticipant, but only the person who started the discussion is accepted.
+  private async findForInitiator(discussionId: number, userId: number): Promise<Discussion> {
+    const discussion = await this.findForParticipant(discussionId, userId);
+    if (discussion.ownerId !== userId) {
+      throw new ForbiddenException('Only the person who started the discussion can do this.');
+    }
+    return discussion;
   }
 
   // Loads a discussion with its announcement, and refuses anyone who is not one of the two people.
